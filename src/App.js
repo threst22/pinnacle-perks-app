@@ -786,15 +786,6 @@ const InventoryManagement = () => {
     const { inventory, updateItem, addItem, deleteItem, showModal, showNotification } = useContext(AppContext);
     const [editingItem, setEditingItem] = useState(null);
 
-    useEffect(() => {
-        if (editingItem) {
-            const currentItemData = inventory.find(i => i.id === editingItem.id);
-            if (currentItemData && JSON.stringify(currentItemData) !== JSON.stringify(editingItem)) {
-                setEditingItem(currentItemData);
-            }
-        }
-    }, [inventory, editingItem]);
-
     const handleSave = () => {
         updateItem(editingItem);
         setEditingItem(null);
@@ -890,7 +881,22 @@ const InventoryManagement = () => {
 
 const EmployeeManagement = () => {
     const { users, updateUser, addUser, deleteUser, showModal, showNotification } = useContext(AppContext);
+    const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
+
+    useEffect(() => {
+        if(editingUser){
+            const currentUserData = users.find(u => u.id === editingUser.id);
+            if(currentUserData && JSON.stringify(currentUserData) !== JSON.stringify(editingUser)){
+                setEditingUser(currentUserData);
+            }
+        }
+    }, [users, editingUser]);
+
+    const handleSave = () => {
+        updateUser(editingUser);
+        setEditingUser(null);
+    };
 
     const handleAddPoints = (user) => {
         const amount = Number(pointsToAdd[user.id] || 0);
@@ -946,7 +952,18 @@ const EmployeeManagement = () => {
                         <tr><th className="px-6 py-3">User</th><th className="px-6 py-3">Role</th><th className="px-6 py-3">Points</th><th className="px-6 py-3">Add/Deduct</th><th className="px-6 py-3">Actions</th></tr>
                     </thead>
                     <tbody>
-                        {users.map(user => (
+                        {users.map(user => editingUser?.id === user.id ? (
+                            <tr key={user.id} className="bg-yellow-50">
+                                <td className="px-6 py-4"><input type="text" value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="p-1 border rounded-md w-full" /></td>
+                                <td className="px-6 py-4">{user.role}</td>
+                                <td className="px-6 py-4"><input type="number" value={editingUser.points} onChange={e => setEditingUser({...editingUser, points: Number(e.target.value)})} className="p-1 border rounded-md w-24" /></td>
+                                <td></td>
+                                <td className="px-6 py-4 flex items-center gap-2">
+                                    <button onClick={handleSave} className="p-2 text-green-600 hover:text-green-800"><Save size={20}/></button>
+                                    <button onClick={() => setEditingUser(null)} className="p-2 text-gray-600 hover:text-gray-800"><X size={20}/></button>
+                                </td>
+                            </tr>
+                        ) : (
                             <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
                                 <td className="px-6 py-4 flex items-center gap-3"><img src={user.pictureUrl} alt={user.username} className="w-10 h-10 rounded-full object-cover"/>{user.username}</td>
                                 <td className="px-6 py-4 capitalize">{user.role}</td>
@@ -959,7 +976,8 @@ const EmployeeManagement = () => {
                                       </div>
                                     )}
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-6 py-4 flex items-center gap-2">
+                                    <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && <button onClick={() => handleDelete(user.id, user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
                                 </td>
                             </tr>

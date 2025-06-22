@@ -7,22 +7,38 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * A helper function to verify the Firebase Auth token.
- * Throws an error if the token is invalid.
+ * A helper function to verify the Firebase Auth token and check for admin role.
+ * Throws an error if the token is invalid or the user is not an admin.
  * @param {string} authorizationHeader The Authorization header from the request.
  */
-const verifyToken = async (authorizationHeader) => {
+const verifyAdminToken = async (authorizationHeader) => {
   if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
-    throw new Error('No token provided.');
+    throw new functions.https.HttpsError('unauthenticated', 'No token provided.');
   }
   const idToken = authorizationHeader.split('Bearer ')[1];
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
+    // SECURITY NOTE: This is a placeholder for a real admin check.
+    // In a production app, you should set a custom claim 'admin: true' on the user
+    // during a trusted process (e.g., another cloud function) and check it here.
+    // For this app, we'll check the role from the database as a fallback.
+    const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'admin') {
+         // A more robust check using custom claims would be:
+         // if (decodedToken.admin !== true) {
+        throw new functions.https.HttpsError('permission-denied', 'User is not an administrator.');
+    }
     return decodedToken;
   } catch (error) {
-    throw new Error('Invalid token.');
+    console.error("Auth Error:", error);
+    // Re-throw specific errors for the client
+    if(error.code === 'auth/id-token-expired') {
+        throw new functions.https.HttpsError('unauthenticated', 'Token has expired.');
+    }
+    throw new functions.https.HttpsError('unauthenticated', error.message || 'Invalid token.');
   }
 };
+
 
 /**
  * Parses a CSV file buffer and returns the data as an array of objects.
@@ -53,43 +69,40 @@ const parseCsv = (csvBuffer) => {
  */
 exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    if (req.method === 'POST') {
-      try {
-        // SECURITY NOTE: A robust implementation should check for an admin role here
-        // using custom claims on the decoded token.
-        await verifyToken(req.headers.authorization);
-        
-        const inventoryData = await parseCsv(req.rawBody);
-        if (!inventoryData.length) throw new Error("CSV file is empty or invalid.");
+    if (req.method !== 'POST') {
+      return res.status(405).send({ message: 'Method Not Allowed' });
+    }
+    
+    try {
+      await verifyAdminToken(req.headers.authorization);
+      
+      const inventoryData = await parseCsv(req.rawBody);
+      if (!inventoryData.length) throw new Error("CSV file is empty or invalid.");
 
-        const batch = db.batch();
-        const inventoryCollection = db.collection(`artifacts/${req.query.appId}/public/data/inventory`);
+      const batch = db.batch();
+      const inventoryCollection = db.collection(`artifacts/${req.query.appId}/public/data/inventory`);
 
-        inventoryData.forEach((item) => {
-          if(!item.id) return; // Skip rows without an ID
-          const docRef = inventoryCollection.doc(item.id);
-          batch.set(docRef, {
-            name: item.name || "No Name",
-            description: item.description || "",
-            price: Number(item.price) || 0,
-            stock: Number(item.stock) || 0,
-            pictureUrl: item.pictureUrl || `https://placehold.co/300x300/F5F5F5/4A4A4A?text=New`,
-            id: item.id,
-          }, { merge: true });
-        });
+      inventoryData.forEach((item) => {
+        if(!item.id) return; // Skip rows without an ID
+        const docRef = inventoryCollection.doc(item.id);
+        batch.set(docRef, {
+          name: item.name || "No Name",
+          description: item.description || "",
+          price: Number(item.price) || 0,
+          stock: Number(item.stock) || 0,
+          pictureUrl: item.pictureUrl || `https://placehold.co/300x300/F5F5F5/4A4A4A?text=New`,
+          id: item.id,
+        }, { merge: true });
+      });
 
-        await batch.commit();
-        return res.status(200).send({ message: `Successfully processed ${inventoryData.length} inventory items.` });
-      } catch (error) {
-        console.error("Inventory Upload Error:", error);
-        if (error.message === 'Invalid token.' || error.message === 'No token provided.') {
-            return res.status(401).send({ message: "Unauthorized", error: error.message });
-        }
-        return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+      await batch.commit();
+      return res.status(200).send({ message: `Successfully processed ${inventoryData.length} inventory items.` });
+    } catch (error) {
+      console.error("Inventory Upload Error:", error.message);
+      if (error.code && error.code.startsWith('functions')) {
+        return res.status(401).send({ message: "Unauthorized", error: error.message });
       }
-    } else {
-      // Handle preflight OPTIONS request
-      return res.status(204).send();
+      return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
     }
   });
 });
@@ -99,40 +112,40 @@ exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
  */
 exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    if (req.method === 'POST') {
-      try {
-        await verifyToken(req.headers.authorization);
+    if (req.method !== 'POST') {
+      return res.status(405).send({ message: 'Method Not Allowed' });
+    }
+    
+    try {
+      await verifyAdminToken(req.headers.authorization);
 
-        const employeeData = await parseCsv(req.rawBody);
-        if (!employeeData.length) throw new Error("CSV file is empty or invalid.");
+      const employeeData = await parseCsv(req.rawBody);
+      if (!employeeData.length) throw new Error("CSV file is empty or invalid.");
 
-        const batch = db.batch();
-        const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
+      const batch = db.batch();
+      const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
 
-        employeeData.forEach((emp) => {
-          if(!emp.username) return;
-          const docRef = usersCollection.doc();
-          batch.set(docRef, {
-              username: emp.username,
-              password: emp.password || "password123",
-              role: emp.role || "employee",
-              points: Number(emp.points) || 0,
-              pictureUrl: emp.pictureUrl || `https://placehold.co/100x100/4A90E2/FFFFFF?text=N`,
-              id: docRef.id
-          });
+      employeeData.forEach((emp) => {
+        if(!emp.username) return;
+        const docRef = usersCollection.doc();
+        batch.set(docRef, {
+            username: emp.username,
+            password: emp.password || "password123",
+            role: emp.role || "employee",
+            points: Number(emp.points) || 0,
+            pictureUrl: emp.pictureUrl || `https://placehold.co/100x100/4A90E2/FFFFFF?text=N`,
+            id: docRef.id
         });
+      });
 
-        await batch.commit();
-        return res.status(200).send({ message: `Successfully uploaded ${employeeData.length} new employees.` });
-      } catch (error) {
-        console.error("Employee Upload Error:", error);
-        if (error.message === 'Invalid token.' || error.message === 'No token provided.') {
-            return res.status(401).send({ message: "Unauthorized", error: error.message });
-        }
-        return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+      await batch.commit();
+      return res.status(200).send({ message: `Successfully uploaded ${employeeData.length} new employees.` });
+    } catch (error) {
+      console.error("Employee Upload Error:", error.message);
+      if (error.code && error.code.startsWith('functions')) {
+          return res.status(401).send({ message: "Unauthorized", error: error.message });
       }
-    } else {
-      return res.status(204).send();
+      return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
     }
   });
 });
@@ -143,40 +156,40 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
  */
 exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    if (req.method === 'POST') {
-      try {
-        await verifyToken(req.headers.authorization);
+    if (req.method !== 'POST') {
+      return res.status(405).send({ message: 'Method Not Allowed' });
+    }
 
-        const pointsData = await parseCsv(req.rawBody);
-        if (!pointsData.length) throw new Error("CSV file is empty or invalid.");
+    try {
+      await verifyAdminToken(req.headers.authorization);
+
+      const pointsData = await parseCsv(req.rawBody);
+      if (!pointsData.length) throw new Error("CSV file is empty or invalid.");
+      
+      const batch = db.batch();
+      const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
+
+      for (const update of pointsData) {
+        if (!update.id || !update.points_to_add) continue;
         
-        const batch = db.batch();
-        const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
+        const docRef = usersCollection.doc(update.id);
+        const amount = Number(update.points_to_add);
+        
+        if(isNaN(amount)) continue;
 
-        for (const update of pointsData) {
-          if (!update.id || !update.points_to_add) continue;
-          
-          const docRef = usersCollection.doc(update.id);
-          const amount = Number(update.points_to_add);
-          
-          if(isNaN(amount)) continue;
-
-          batch.update(docRef, {
-              points: admin.firestore.FieldValue.increment(amount)
-          });
-        }
-
-        await batch.commit();
-        return res.status(200).send({ message: `Successfully processed ${pointsData.length} points updates.` });
-      } catch (error) {
-        console.error("Points Upload Error:", error);
-        if (error.message === 'Invalid token.' || error.message === 'No token provided.') {
-            return res.status(401).send({ message: "Unauthorized", error: error.message });
-        }
-        return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+        batch.update(docRef, {
+            points: admin.firestore.FieldValue.increment(amount)
+        });
       }
-    } else {
-      return res.status(204).send();
+
+      await batch.commit();
+      return res.status(200).send({ message: `Successfully processed ${pointsData.length} points updates.` });
+    } catch (error) {
+      console.error("Points Upload Error:", error.message);
+      if (error.code && error.code.startsWith('functions')) {
+          return res.status(401).send({ message: "Unauthorized", error: error.message });
+      }
+      return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
     }
   });
 });

@@ -499,7 +499,6 @@ function App() {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
             await updateDoc(userRef, userToUpdate);
             showNotification("User updated successfully.", "success");
-            // No optimistic update needed, listener will catch it.
         } catch (error) {
             console.error("Error updating user:", error);
             showNotification(`Failed to update user: ${error.message}`, 'error');
@@ -513,7 +512,6 @@ function App() {
         try {
             await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
             showNotification(`User "${displayName}" deleted successfully.`, 'info');
-            // No optimistic update needed, listener will catch it.
         } catch (error) {
             console.error("Error deleting user: ", error);
             showNotification(`Failed to delete user: ${error.message}`, 'error');
@@ -528,8 +526,14 @@ function App() {
         const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, newItem.id);
         await setDoc(itemRef, newItem);
     },
-    deleteItem: async (itemId) => {
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/inventory`, itemId));
+    deleteItem: async (itemId, itemName) => {
+        try {
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/inventory`, itemId));
+            showNotification(`Item "${itemName}" deleted successfully.`, 'info');
+        } catch (error) {
+            console.error("Error deleting item:", error);
+            showNotification(`Failed to delete item: ${error.message}`, 'error');
+        }
     },
     handleApproval: async (purchaseId, isApproved) => {
         try {
@@ -1052,14 +1056,13 @@ const InventoryManagement = () => {
       setEditingItem(newItem);
     };
     
-    const handleDelete = (itemId, itemName) => showModal(
-        'Delete Item', 
-        <span>Are you sure you want to delete <strong>"{itemName}"</strong>? This action cannot be undone.</span>, 
-        () => {
-            deleteItem(itemId);
-            showNotification(`"${itemName}" has been deleted.`, 'info');
-        }
-    );
+    const handleDelete = (itemId, itemName) => {
+        showModal(
+            'Delete Item', 
+            <span>Are you sure you want to delete <strong>"{itemName}"</strong>? This action cannot be undone.</span>, 
+            () => deleteItem(itemId, itemName)
+        );
+    };
 
     const handlePictureChange = (e) => {
         const file = e.target.files[0];

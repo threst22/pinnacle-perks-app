@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 import { Camera, Upload, Download, X, Edit, Save, PlusCircle, MinusCircle, CheckCircle, XCircle, FileText, UserPlus, ShoppingCart, LogOut, Settings, Users, Box, BarChart2, Loader2 } from 'lucide-react';
 
 // --- Firebase SDK Imports ---
@@ -195,15 +195,38 @@ function App() {
 
     return () => unsubscribe();
   }, [loggedInUser, firebaseUser]);
-
+  
   // --- UI Functions ---
-  const showNotification = (message, type = 'success', duration = 3000) => {
+  const showNotification = useCallback((message, type = 'success', duration = 3000) => {
     setNotification({ message, type, show: true });
     setTimeout(() => {
       setNotification({ message: '', type: '', show: false });
     }, duration);
-  };
+  }, []);
   
+  const handleLogout = useCallback(() => {
+    setLoggedInUser(null);
+    setCurrentPage('store');
+    showNotification('You have been logged out.', 'info');
+  }, [showNotification]);
+
+  // This effect syncs the local loggedInUser state with the real-time user data from Firestore.
+  // This ensures that updates (like a picture change) are reflected immediately.
+  useEffect(() => {
+    if (loggedInUser && users.length > 0) {
+        const currentUserData = users.find(u => u.id === loggedInUser.id);
+        if (currentUserData) {
+            // A deep comparison is expensive, a shallow one on a key field is often enough
+            if (currentUserData.pictureUrl !== loggedInUser.pictureUrl || currentUserData.points !== loggedInUser.points) {
+                setLoggedInUser(currentUserData);
+            }
+        } else {
+            // User was deleted from another client, so log them out.
+            handleLogout();
+        }
+    }
+  }, [users, loggedInUser, handleLogout]);
+
   const showModal = (title, content, onConfirm) => {
     setModal({ isOpen: true, title, content, onConfirm });
   };
@@ -222,12 +245,6 @@ function App() {
     } else {
       showNotification('Invalid username or password.', 'error');
     }
-  };
-
-  const handleLogout = () => {
-    setLoggedInUser(null);
-    setCurrentPage('store');
-    showNotification('You have been logged out.', 'info');
   };
   
   const getPriceWithInflation = (price) => Math.round(price * (1 + inflation / 100));

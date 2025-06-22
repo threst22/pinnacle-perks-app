@@ -205,6 +205,8 @@ function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingState, setDeletingState] = useState({ type: null, id: null });
+
 
   // App Data State
   const [users, setUsers] = useState([]);
@@ -465,6 +467,7 @@ function App() {
   };
   
     const deleteAllEmployees = async () => {
+        setDeletingState({ type: 'all-employees', id: 'all' });
         try {
             const employeesToDelete = users.filter(u => u.role === 'employee');
             if (employeesToDelete.length === 0) {
@@ -483,10 +486,13 @@ function App() {
         } catch (error) {
             console.error("Error deleting all employees:", error);
             showNotification(`Failed to delete employees: ${error.message}`, 'error');
+        } finally {
+            setDeletingState({ type: null, id: null });
         }
     };
     
     const deleteAllPurchases = async () => {
+        setDeletingState({ type: 'all-purchases', id: 'all' });
         try {
             const purchasesCollectionRef = collection(db, `artifacts/${appId}/public/data/purchases`);
             const querySnapshot = await getDocs(purchasesCollectionRef);
@@ -505,13 +511,15 @@ function App() {
         } catch (error) {
             console.error("Error deleting all purchases:", error);
             showNotification(`Failed to reset activities: ${error.message}`, 'error');
+        } finally {
+             setDeletingState({ type: null, id: null });
         }
     };
 
   const contextValue = {
     users, inventory, purchases, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
-    isAdmin, pendingPurchasesCount, isUploading,
+    isAdmin, pendingPurchasesCount, isUploading, deletingState,
     showNotification, handleLogin, handleLogout, getPriceWithInflation, addToCart, updateCartQuantity, handlePurchaseRequest,
     handleCSVUpload, showModal, closeModal,
     setInflation: async (newInflation) => {
@@ -533,12 +541,15 @@ function App() {
         await updateDoc(docRef, { id: docRef.id });
     },
     deleteUser: async (userId, displayName) => {
+        setDeletingState({ type: 'user', id: userId });
         try {
             await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
             showNotification(`User "${displayName}" deleted successfully.`, 'info');
         } catch (error) {
             console.error("Error deleting user: ", error);
             showNotification(`Failed to delete user: ${error.message}`, 'error');
+        } finally {
+            setDeletingState({ type: null, id: null });
         }
     },
     deleteAllEmployees,
@@ -552,12 +563,15 @@ function App() {
         await setDoc(itemRef, newItem);
     },
     deleteItem: async (itemId, itemName) => {
+        setDeletingState({ type: 'item', id: itemId });
         try {
             await deleteDoc(doc(db, `artifacts/${appId}/public/data/inventory`, itemId));
             showNotification(`Item "${itemName}" deleted successfully.`, 'info');
         } catch (error) {
             console.error("Error deleting item:", error);
             showNotification(`Failed to delete item: ${error.message}`, 'error');
+        } finally {
+            setDeletingState({ type: null, id: null });
         }
     },
     handleApproval: async (purchaseId, isApproved) => {
@@ -1081,7 +1095,7 @@ const AdminPageContainer = ({ title, icon, children }) => (
 );
 
 const InventoryManagement = () => {
-    const { inventory, updateItem, addItem, deleteItem, showModal, showNotification, handleCSVUpload, isUploading } = useContext(AppContext);
+    const { inventory, updateItem, addItem, deleteItem, showModal, showNotification, handleCSVUpload, isUploading, deletingState } = useContext(AppContext);
     const [editingItem, setEditingItem] = useState(null);
 
     const handleSave = () => {
@@ -1179,7 +1193,9 @@ const InventoryManagement = () => {
                                 <td className="px-6 py-4">{item.price.toLocaleString()}</td><td className="px-6 py-4">{item.stock}</td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingItem({...item})} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
-                                    <button onClick={() => handleDelete(item.id, item.name)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>
+                                    <button onClick={() => handleDelete(item.id, item.name)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === item.id}>
+                                        {deletingState.id === item.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -1191,7 +1207,7 @@ const InventoryManagement = () => {
 };
 
 const EmployeeManagement = () => {
-    const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading } = useContext(AppContext);
+    const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading, deletingState } = useContext(AppContext);
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
     const [selectedUsers, setSelectedUsers] = useState(new Set());
@@ -1386,8 +1402,8 @@ const EmployeeManagement = () => {
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
-                                      <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800">
-                                          <XCircle size={20}/>
+                                      <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === user.id}>
+                                        {deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
                                       </button>
                                     )}
                                 </td>
@@ -1447,7 +1463,7 @@ const ApprovalQueue = () => {
 };
 
 const SettingsPage = () => {
-    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deleteAllPurchases } = useContext(AppContext);
+    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deleteAllPurchases, deletingState } = useContext(AppContext);
     const [localInflation, setLocalInflation] = useState(inflation);
 
     useEffect(() => {
@@ -1475,6 +1491,9 @@ const SettingsPage = () => {
         );
     };
 
+    const isDeletingAllEmployees = deletingState.type === 'all-employees';
+    const isDeletingAllPurchases = deletingState.type === 'all-purchases';
+
     return (
         <AdminPageContainer title="Global Settings" icon={<Settings className="mr-3"/>}>
             <div className="space-y-8">
@@ -1496,18 +1515,20 @@ const SettingsPage = () => {
                         <p className="text-sm text-gray-600 mb-2">This will permanently remove all users with the 'employee' role.</p>
                         <button 
                             onClick={handleDeleteAllEmployees} 
-                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors"
+                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center w-48"
+                            disabled={isDeletingAllEmployees}
                         >
-                            Delete All Employees
+                            {isDeletingAllEmployees ? <Loader2 className="animate-spin" /> : 'Delete All Employees'}
                         </button>
                     </div>
                      <div>
                         <p className="text-sm text-gray-600 mb-2">This will permanently delete all purchase history from the 'Latest Activity' feed.</p>
                         <button 
                             onClick={handleResetActivities} 
-                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors"
+                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center w-48"
+                            disabled={isDeletingAllPurchases}
                         >
-                            Reset All Activities
+                             {isDeletingAllPurchases ? <Loader2 className="animate-spin" /> : 'Reset All Activities'}
                         </button>
                     </div>
                 </div>

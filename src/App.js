@@ -155,9 +155,9 @@ const AppContext = createContext(null);
 // --- Initial Data Seeding Logic ---
 const getInitialSeedData = () => {
   const initialUsers = [
-    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A` },
-    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A` },
-    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B` },
+    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false },
+    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: false },
+    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false },
   ];
   const initialInventory = [
     { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie` },
@@ -350,7 +350,6 @@ function App() {
     if (user) {
       setLoggedInUser(user);
       showNotification(`Welcome back, ${user.employeeName || user.username}!`, 'success');
-      setCurrentPage('store');
     } else {
       showNotification('Invalid username or password.', 'error');
     }
@@ -628,6 +627,19 @@ function App() {
             console.error("Transaction failed: ", error);
             showNotification(`Error: ${error.toString()}`, 'error');
         }
+    },
+    resetPassword: async (userId) => {
+        try {
+            const userRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
+            await updateDoc(userRef, {
+                password: "password123",
+                forcePasswordChange: true,
+            });
+            showNotification("Password has been reset.", 'success');
+        } catch(error) {
+            console.error("Error resetting password:", error);
+            showNotification(`Failed to reset password: ${error.message}`, 'error');
+        }
     }
   };
 
@@ -638,6 +650,17 @@ function App() {
             <span className="text-xl">Loading Pinnacle Perks...</span>
         </div>
     );
+  }
+
+  if (loggedInUser?.forcePasswordChange) {
+      return (
+        <AppContext.Provider value={contextValue}>
+          <div className="bg-gray-100 min-h-screen font-sans">
+              <Notification />
+              <ChangePasswordPage />
+          </div>
+      </AppContext.Provider>
+      )
   }
 
   if (!loggedInUser) {
@@ -1209,7 +1232,7 @@ const InventoryManagement = () => {
 };
 
 const EmployeeManagement = () => {
-    const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading, deletingState } = useContext(AppContext);
+    const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading, deletingState, resetPassword } = useContext(AppContext);
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
     const [selectedUsers, setSelectedUsers] = useState(new Set());
@@ -1224,7 +1247,7 @@ const EmployeeManagement = () => {
         if (file && file.type.startsWith("image/")) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setEditingItem(prev => ({...prev, pictureUrl: reader.result}));
+                setEditingUser(prev => ({...prev, pictureUrl: reader.result}));
             };
             reader.readAsDataURL(file);
         } else {
@@ -1247,7 +1270,8 @@ const EmployeeManagement = () => {
             password: 'password123', 
             role: 'employee', 
             points: 0, 
-            pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N` 
+            pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N`,
+            forcePasswordChange: true
         };
         addUser(newUser);
         showNotification(`New user "${newUser.username}" created.`, 'success');
@@ -1319,6 +1343,14 @@ const EmployeeManagement = () => {
         const file = e.target.files[0];
         if (file) handleCSVUpload(file, EMPLOYEES_UPLOAD_URL);
         e.target.value = null;
+    };
+
+    const handleResetPassword = (user) => {
+        showModal(
+            'Reset Password',
+            `Are you sure you want to reset the password for ${user.employeeName || user.username}?`,
+            () => resetPassword(user.id)
+        );
     };
 
 
@@ -1404,9 +1436,12 @@ const EmployeeManagement = () => {
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
-                                      <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === user.id}>
-                                        {deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
-                                      </button>
+                                      <>
+                                        <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password"><Save size={20}/></button>
+                                        <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === user.id}>
+                                            {deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
+                                        </button>
+                                      </>
                                     )}
                                 </td>
                             </tr>
@@ -1546,5 +1581,74 @@ const Footer = () => (
         </div>
     </footer>
 );
+
+const ChangePasswordPage = () => {
+    const { updateUser, loggedInUser, showNotification } = useContext(AppContext);
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (password.length < 6) {
+            showNotification("Password must be at least 6 characters long.", "error");
+            return;
+        }
+        if (password !== confirmPassword) {
+            showNotification("Passwords do not match.", "error");
+            return;
+        }
+        await updateUser({
+            ...loggedInUser,
+            password,
+            forcePasswordChange: false,
+        });
+        showNotification("Password changed successfully!", "success");
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg">
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold text-orange-500">Change Your Password</h1>
+                    <p className="mt-2 text-gray-600">For security, please create a new password.</p>
+                </div>
+                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                    <div className="rounded-md shadow-sm -space-y-px">
+                        <div>
+                            <input
+                                id="new-password"
+                                name="new-password"
+                                type="password"
+                                required
+                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                                placeholder="New Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <input
+                                id="confirm-password"
+                                name="confirm-password"
+                                type="password"
+                                required
+                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                                placeholder="Confirm New Password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                            Set New Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 
 export default App;

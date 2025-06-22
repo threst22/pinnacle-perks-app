@@ -111,6 +111,12 @@ const Loader2 = ({ className, size }) => (
     <Icon className={className} size={size}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></Icon>
 );
 
+const Activity = ({ className, size }) => (
+  <Icon className={className} size={size}>
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </Icon>
+);
+
 
 // --- Firebase Configuration & Initialization ---
 let app, auth, db;
@@ -663,10 +669,6 @@ const Login = (props) => {
             </button>
           </div>
         </form>
-        <div className="text-center text-xs text-gray-500 mt-4">
-            <p>Admin Login: admin / 1nTu1tu53r</p>
-            <p>Employee Login: alice / password123</p>
-        </div>
       </div>
     </div>
   );
@@ -774,8 +776,15 @@ const PriceDisplay = ({ originalPrice }) => {
 const StorePage = (props) => {
     const { inventory, addToCart } = useContext(AppContext);
     return (
-        <div>
-            <Leaderboard />
+        <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2">
+                    <Leaderboard />
+                </div>
+                <div className="lg:col-span-1">
+                    <RecentPurchases />
+                </div>
+            </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6 mt-8">Welcome to the Store</h1>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {inventory.map(item => (
@@ -931,7 +940,7 @@ const Leaderboard = () => {
     const topEmployees = [...users].filter(u => u.role === 'employee').sort((a, b) => b.points - a.points).slice(0, 10);
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-lg">
+        <div className="bg-white p-6 rounded-lg shadow-lg h-full">
             <h3 className="text-2xl font-bold mb-4 flex items-center"><BarChart2 className="mr-2 text-orange-500"/> Top 10 Employees by Points</h3>
             <ol className="space-y-3">
                 {topEmployees.map((user, index) => (
@@ -945,6 +954,46 @@ const Leaderboard = () => {
                     </li>
                 ))}
             </ol>
+        </div>
+    );
+};
+
+const RecentPurchases = () => {
+    const { purchases, users } = useContext(AppContext);
+    const recentApproved = purchases
+        .filter(p => p.status === 'approved')
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 3);
+    
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-lg h-full">
+            <h3 className="text-2xl font-bold mb-4 flex items-center"><Activity className="mr-2 text-orange-500"/> Latest Activity</h3>
+            {recentApproved.length > 0 ? (
+                <ul className="space-y-4">
+                    {recentApproved.map(purchase => {
+                        const user = users.find(u => u.id === purchase.userId);
+                        const mainItem = purchase.items[0];
+                        return (
+                            <li key={purchase.id} className="flex items-center gap-4">
+                                <img src={user?.pictureUrl} alt={user?.username} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm">
+                                        <span className="font-semibold">{user?.employeeName || user?.username}</span>
+                                        {' '}redeemed{' '}
+                                        <span className="font-semibold">{mainItem.name}</span>
+                                        {purchase.items.length > 1 && ` and ${purchase.items.length - 1} other item(s)`}.
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {new Date(purchase.date).toLocaleString()}
+                                    </p>
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            ) : (
+                <p className="text-gray-500">No recent purchases in the store.</p>
+            )}
         </div>
     );
 };

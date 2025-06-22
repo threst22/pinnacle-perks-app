@@ -461,6 +461,28 @@ function App() {
         setIsUploading(false);
     }
   };
+  
+    const deleteAllEmployees = async () => {
+        try {
+            const employeesToDelete = users.filter(u => u.role === 'employee');
+            if (employeesToDelete.length === 0) {
+                showNotification("No employees to delete.", "info");
+                return;
+            }
+
+            const batch = writeBatch(db);
+            employeesToDelete.forEach(emp => {
+                const userRef = doc(db, `artifacts/${appId}/public/data/users`, emp.id);
+                batch.delete(userRef);
+            });
+
+            await batch.commit();
+            showNotification(`${employeesToDelete.length} employee(s) deleted successfully.`, 'success');
+        } catch (error) {
+            console.error("Error deleting all employees:", error);
+            showNotification(`Failed to delete employees: ${error.message}`, 'error');
+        }
+    };
 
   const contextValue = {
     users, inventory, purchases, inflation, cart, firebaseUser,
@@ -475,6 +497,8 @@ function App() {
     updateUser: async (userToUpdate) => {
         const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
         await updateDoc(userRef, userToUpdate);
+        // Optimistic UI update for user edits
+        setUsers(prevUsers => prevUsers.map(u => u.id === userToUpdate.id ? userToUpdate : u));
     },
     addUser: async (newUser) => {
         const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/users`), newUser);
@@ -483,12 +507,15 @@ function App() {
     deleteUser: async (userId, displayName) => {
         try {
             await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
+            // Optimistic UI update
+            setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
             showNotification(`User "${displayName}" deleted successfully.`, 'info');
         } catch (error) {
             console.error("Error deleting user: ", error);
             showNotification(`Failed to delete user: ${error.message}`, 'error');
         }
     },
+    deleteAllEmployees,
     updateItem: async (itemToUpdate) => {
         const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, itemToUpdate.id);
         await updateDoc(itemRef, itemToUpdate);
@@ -1311,7 +1338,7 @@ const ApprovalQueue = () => {
 };
 
 const SettingsPage = () => {
-    const { inflation, setInflation: setGlobalInflation, showNotification } = useContext(AppContext);
+    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees } = useContext(AppContext);
     const [localInflation, setLocalInflation] = useState(inflation);
 
     useEffect(() => {
@@ -1322,19 +1349,42 @@ const SettingsPage = () => {
         setGlobalInflation(Number(localInflation));
         showNotification('Settings saved successfully!', 'success');
     };
+    
+    const handleDeleteAllEmployees = () => {
+        showModal(
+            'Delete All Employees',
+            <span>Are you sure you want to delete <strong>ALL</strong> non-admin employees? This action is irreversible.</span>,
+            deleteAllEmployees
+        );
+    };
 
     return (
         <AdminPageContainer title="Global Settings" icon={<Settings className="mr-3"/>}>
-            <div className="p-6 border rounded-lg">
-                <h3 className="text-xl font-semibold mb-4">Global Inflation Rate</h3>
-                <p className="text-sm text-gray-600 mb-4">Set a global percentage to increase or decrease all item prices. Use a negative number for deflation.</p>
-                <div className="flex items-center gap-4">
-                    <input type="number" value={localInflation} onChange={e => setLocalInflation(e.target.value)} className="p-2 border rounded-md w-40"/>
-                    <span className="text-xl font-semibold">%</span>
+            <div className="space-y-8">
+                <div className="p-6 border rounded-lg">
+                    <h3 className="text-xl font-semibold mb-4">Global Inflation Rate</h3>
+                    <p className="text-sm text-gray-600 mb-4">Set a global percentage to increase or decrease all item prices. Use a negative number for deflation.</p>
+                    <div className="flex items-center gap-4">
+                        <input type="number" value={localInflation} onChange={e => setLocalInflation(e.target.value)} className="p-2 border rounded-md w-40"/>
+                        <span className="text-xl font-semibold">%</span>
+                    </div>
+                     <div className="flex justify-end mt-6">
+                        <button onClick={handleSave} className="bg-orange-500 text-white font-bold py-3 px-6 rounded-md hover:bg-orange-600 transition-colors">Save Inflation</button>
+                    </div>
                 </div>
-            </div>
-            <div className="flex justify-end mt-6">
-                <button onClick={handleSave} className="bg-orange-500 text-white font-bold py-3 px-6 rounded-md hover:bg-orange-600 transition-colors">Save Settings</button>
+
+                <div className="p-6 border-2 border-red-500 rounded-lg">
+                    <h3 className="text-xl font-semibold text-red-700 mb-4">Danger Zone</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                        This action is destructive and cannot be undone. This will permanently remove all users with the 'employee' role.
+                    </p>
+                    <button 
+                        onClick={handleDeleteAllEmployees} 
+                        className="bg-red-600 text-white font-bold py-3 px-6 rounded-md hover:bg-red-700 transition-colors"
+                    >
+                        Delete All Employees
+                    </button>
+                </div>
             </div>
         </AdminPageContainer>
     );

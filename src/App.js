@@ -11,14 +11,16 @@ let app, auth, db;
 
 try {
     // These global variables are expected to be injected by the hosting environment.
-    const firebaseConfig = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyAXPqrctzE76zeOrlYx8NoOSauj8wxxRA4",
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "pinnacle2-ab305.firebaseapp.com",
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "pinnacle2-ab305",
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "pinnacle2-ab305.appspot.com",
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "847346950956",
-    appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:847346950956:web:feac3f5f83ac90e99f8289"
-};
+    const firebaseConfig = typeof __firebase_config !== 'undefined' 
+        ? JSON.parse(__firebase_config)
+        : {
+            apiKey: "AIzaSyAXPqrctzE76zeOrlYx8NoOSauj8wxxRA4",
+            authDomain: "pinnacle2-ab305.firebaseapp.com",
+            projectId: "pinnacle2-ab305",
+            storageBucket: "pinnacle2-ab305.appspot.com",
+            messagingSenderId: "847346950956",
+            appId: "1:847346950956:web:feac3f5f83ac90e99f8289"
+        };
     
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -153,6 +155,8 @@ function App() {
         const usersQuery = query(collection(db, `artifacts/${appId}/public/data/users`));
         unsubscribers.push(onSnapshot(usersQuery, (snapshot) => {
             const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // *** DEBUGGING LINE ADDED HERE ***
+            console.log("Users fetched from Firestore:", usersData);
             setUsers(usersData);
         }, (error) => console.error("Users listener error:", error)));
 

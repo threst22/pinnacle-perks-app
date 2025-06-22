@@ -7,19 +7,19 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "cors": "^2.8.5",
     "firebase": "^11.9.1",
     "lucide-react": "^0.522.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "web-vitals": "^5.0.3"
   },
-"scripts": {
-  "start": "craco start",
-  "build": "craco build",
-  "test": "craco test",
-  "eject": "react-scripts eject"
-},
-
+  "scripts": {
+    "start": "craco start",
+    "build": "craco build",
+    "test": "craco test",
+    "eject": "react-scripts eject"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",

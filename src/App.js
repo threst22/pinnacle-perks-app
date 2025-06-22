@@ -92,7 +92,7 @@ const LogOut = ({ className, size }) => (
 );
 
 const Settings = ({ className, size }) => (
-    <Icon className={className} size={size}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1h.44a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></Icon>
+    <Icon className={className} size={size}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1h.44a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></Icon>
 );
 
 const Users = ({ className, size }) => (
@@ -149,9 +149,9 @@ const AppContext = createContext(null);
 // --- Initial Data Seeding Logic ---
 const getInitialSeedData = () => {
   const initialUsers = [
-    { id: 'admin-01', username: 'admin', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A` },
-    { id: 'emp-01', username: 'alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A` },
-    { id: 'emp-02', username: 'bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B` },
+    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A` },
+    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A` },
+    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B` },
   ];
   const initialInventory = [
     { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie` },
@@ -340,7 +340,7 @@ function App() {
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
       setLoggedInUser(user);
-      showNotification(`Welcome back, ${user.username}!`, 'success');
+      showNotification(`Welcome back, ${user.employeeName || user.username}!`, 'success');
       setCurrentPage('store');
     } else {
       showNotification('Invalid username or password.', 'error');
@@ -403,13 +403,18 @@ function App() {
       const totalCost = purchaseItems.reduce((acc, item) => acc + item.purchasePrice * item.quantity, 0);
 
       if (user.points < totalCost) {
-          showNotification(`Not enough Pinn Points for ${user.username}. Required: ${totalCost}, Available: ${user.points}`, 'error');
+          showNotification(`Not enough Pinn Points for ${user.employeeName || user.username}. Required: ${totalCost}, Available: ${user.points}`, 'error');
           return;
       }
 
       const newPurchase = {
-          userId: user.id, username: user.username, items: purchaseItems, totalCost,
-          date: new Date().toISOString(), status: 'pending',
+          userId: user.id, 
+          username: user.username,
+          employeeName: user.employeeName,
+          items: purchaseItems, 
+          totalCost,
+          date: new Date().toISOString(), 
+          status: 'pending',
       };
       
       await addDoc(collection(db, `artifacts/${appId}/public/data/purchases`), newPurchase);
@@ -455,7 +460,6 @@ function App() {
     users, inventory, purchases, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
     isAdmin, pendingPurchasesCount, isUploading,
-    notification, modal,
     showNotification, handleLogin, handleLogout, getPriceWithInflation, addToCart, updateCartQuantity, handlePurchaseRequest,
     handleCSVUpload, showModal, closeModal,
     setInflation: async (newInflation) => {
@@ -719,7 +723,7 @@ const Navbar = (props) => {
              </button>
             <div className="flex items-center ml-2">
               <img className="h-8 w-8 rounded-full object-cover" src={loggedInUser.pictureUrl} alt={loggedInUser.username} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Err`; }}/>
-              <span className="ml-2 text-gray-700 text-sm font-medium hidden md:block">{loggedInUser.username}</span>
+              <span className="ml-2 text-gray-700 text-sm font-medium hidden md:block">{loggedInUser.employeeName || loggedInUser.username}</span>
             </div>
             <button onClick={handleLogout} className="ml-4 p-2 rounded-full text-gray-600 hover:text-orange-500 hover:bg-gray-100 focus:outline-none transition-colors">
               <LogOut size={20}/>
@@ -843,7 +847,7 @@ const CartPage = (props) => {
                                 <label htmlFor="checkoutUser" className="text-sm font-medium">Checkout for Employee:</label>
                                 <select id="checkoutUser" value={checkoutForUser} onChange={e => setCheckoutForUser(e.target.value)} className="p-2 border rounded-md">
                                     <option value={loggedInUser.id}>Myself (admin)</option>
-                                    {users.filter(u => u.role === 'employee').map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                                    {users.filter(u => u.role === 'employee').map(u => <option key={u.id} value={u.id}>{u.employeeName || u.username}</option>)}
                                 </select>
                             </div>
                         )}
@@ -887,8 +891,8 @@ const ProfilePage = () => {
                     </button>
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePictureChange} className="hidden" />
                 </div>
-                <h2 className="mt-4 text-3xl font-bold">{loggedInUser.username}</h2>
-                <p className="text-gray-500 capitalize">{loggedInUser.role}</p>
+                <h2 className="mt-4 text-3xl font-bold">{loggedInUser.employeeName || loggedInUser.username}</h2>
+                <p className="text-gray-500">@{loggedInUser.username} | <span className="capitalize">{loggedInUser.role}</span></p>
                 <div className="mt-6 bg-orange-100 text-orange-700 p-4 rounded-lg text-center w-full">
                     <p className="text-lg">Available Balance</p>
                     <p className="text-4xl font-bold">{loggedInUser.points.toLocaleString()} PP</p>
@@ -929,7 +933,7 @@ const Leaderboard = () => {
                         <div className="flex items-center">
                             <span className="font-bold text-lg w-8 text-gray-500">{index + 1}.</span>
                             <img src={user.pictureUrl} alt={user.username} className="h-10 w-10 rounded-full object-cover mr-3" />
-                            <span className="font-medium">{user.username}</span>
+                            <span className="font-medium">{user.employeeName || user.username}</span>
                         </div>
                         <span className="font-bold text-orange-500">{user.points.toLocaleString()} PP</span>
                     </li>
@@ -1073,11 +1077,18 @@ const EmployeeManagement = () => {
         if (amount === 0) return;
         updateUser({ ...user, points: user.points + amount });
         setPointsToAdd(prev => ({...prev, [user.id]: ''}));
-        showNotification(`${amount.toLocaleString()} points added to ${user.username}`, 'success');
+        showNotification(`${amount.toLocaleString()} points added to ${user.employeeName || user.username}`, 'success');
     };
     
     const handleAddNewUser = () => {
-        const newUser = { username: `new.user.${Date.now()}`.slice(-15), password: 'password123', role: 'employee', points: 0, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N` };
+        const newUser = { 
+            username: `new.user.${Date.now()}`.slice(-15), 
+            employeeName: 'New User',
+            password: 'password123', 
+            role: 'employee', 
+            points: 0, 
+            pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N` 
+        };
         addUser(newUser);
         showNotification(`New user "${newUser.username}" created.`, 'success');
     };
@@ -1102,7 +1113,7 @@ const EmployeeManagement = () => {
     };
 
     const downloadEmployeesCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "username,password,role,points,pictureUrl\n";
+        const csvContent = "data:text/csv;charset=utf-8," + "username,employeeName,password,role,points,pictureUrl\n";
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -1150,8 +1161,11 @@ const EmployeeManagement = () => {
                     <tbody>
                         {users.map(user => editingUser?.id === user.id ? (
                             <tr key={user.id} className="bg-yellow-50">
-                                <td className="px-6 py-4"><input type="text" value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="p-1 border rounded-md w-full" /></td>
-                                <td className="px-6 py-4">{user.role}</td>
+                                <td className="px-6 py-4">
+                                    <input type="text" placeholder="Display Name" value={editingUser.employeeName} onChange={e => setEditingUser({...editingUser, employeeName: e.target.value})} className="p-1 border rounded-md w-full mb-2" />
+                                    <input type="text" placeholder="Username" value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="p-1 border rounded-md w-full" />
+                                </td>
+                                <td className="px-6 py-4 capitalize">{user.role}</td>
                                 <td className="px-6 py-4"><input type="number" value={editingUser.points} onChange={e => setEditingUser({...editingUser, points: Number(e.target.value)})} className="p-1 border rounded-md w-24" /></td>
                                 <td></td>
                                 <td className="px-6 py-4 flex items-center gap-2">
@@ -1161,7 +1175,13 @@ const EmployeeManagement = () => {
                             </tr>
                         ) : (
                             <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
-                                <td className="px-6 py-4 flex items-center gap-3"><img src={user.pictureUrl} alt={user.username} className="w-10 h-10 rounded-full object-cover"/>{user.username}</td>
+                                <td className="px-6 py-4 flex items-center gap-3">
+                                    <img src={user.pictureUrl} alt={user.username} className="w-10 h-10 rounded-full object-cover"/>
+                                    <div>
+                                        <div className="font-medium">{user.employeeName || user.username}</div>
+                                        <div className="text-xs text-gray-500">@{user.username}</div>
+                                    </div>
+                                </td>
                                 <td className="px-6 py-4 capitalize">{user.role}</td>
                                 <td className="px-6 py-4 font-semibold">{user.points.toLocaleString()}</td>
                                 <td className="px-6 py-4">
@@ -1199,7 +1219,7 @@ const ApprovalQueue = () => {
                             <div key={p.id} className="border rounded-lg p-4 shadow-sm bg-gray-50">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold text-lg">{p.username}</p>
+                                        <p className="font-bold text-lg">{p.employeeName || p.username}</p>
                                         <p className="text-sm text-gray-500">On: {new Date(p.date).toLocaleString()}</p>
                                         <p className="text-sm text-gray-600 mt-1">Current Balance: <strong>{user?.points.toLocaleString() || 'N/A'} PP</strong></p>
                                     </div>

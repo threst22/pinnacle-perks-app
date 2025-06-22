@@ -1064,11 +1064,13 @@ const Leaderboard = () => {
 };
 
 const RecentPurchases = () => {
-    const { purchases, users, loggedInUser } = useContext(AppContext);
+    const { purchases, users } = useContext(AppContext);
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
     const recentApproved = purchases
-        .filter(p => p.status === 'approved')
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 3);
+        .filter(p => p.status === 'approved' && new Date(p.date) >= twoDaysAgo)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
     
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg h-full">

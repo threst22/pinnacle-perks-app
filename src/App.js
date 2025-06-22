@@ -422,6 +422,7 @@ function App() {
           totalCost,
           date: new Date().toISOString(), 
           status: 'pending',
+          redeemedBy: loggedInUser.id, // Track who initiated the purchase
       };
       
       await addDoc(collection(db, `artifacts/${appId}/public/data/purchases`), newPurchase);
@@ -1024,7 +1025,7 @@ const Leaderboard = () => {
 };
 
 const RecentPurchases = () => {
-    const { purchases, users } = useContext(AppContext);
+    const { purchases, users, loggedInUser } = useContext(AppContext);
     const recentApproved = purchases
         .filter(p => p.status === 'approved')
         .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -1037,14 +1038,23 @@ const RecentPurchases = () => {
                 <ul className="space-y-4">
                     {recentApproved.map(purchase => {
                         const user = users.find(u => u.id === purchase.userId);
+                        const redeemer = users.find(u => u.id === purchase.redeemedBy);
                         const mainItem = purchase.items[0];
+                        
+                        let activityText;
+                        if(purchase.redeemedBy === purchase.userId || !redeemer) {
+                            activityText = <><span className="font-semibold">{user?.employeeName || user?.username}</span> redeemed</>
+                        } else {
+                             activityText = <><span className="font-semibold">{redeemer?.employeeName || redeemer?.username}</span> redeemed for <span className="font-semibold">{user?.employeeName || user?.username}</span></>
+                        }
+
                         return (
                             <li key={purchase.id} className="flex items-center gap-4">
                                 <img src={user?.pictureUrl} alt={user?.username} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
                                 <div>
                                     <p className="text-sm">
-                                        <span className="font-semibold">{user?.employeeName || user?.username}</span>
-                                        {' '}redeemed{' '}
+                                        {activityText}
+                                        {' '}
                                         <span className="font-semibold">{mainItem.name}</span>
                                         {purchase.items.length > 1 && ` and ${purchase.items.length - 1} other item(s)`}.
                                     </p>

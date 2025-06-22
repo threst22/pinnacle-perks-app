@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef, useCallback, useMemo } from 'react';
 
 // --- Firebase SDK Imports ---
 // These are assumed to be available in the environment
@@ -118,6 +118,8 @@ const KeyRound = ({ className, size }) => (
     </Icon>
 );
 
+// --- Constants ---
+const DEPARTMENTS = ['Accounting', 'Service and Sales', 'Warranty', 'Payables', 'Parts'];
 
 // --- Firebase Configuration & Initialization ---
 let app, auth, db;
@@ -156,17 +158,22 @@ const AppContext = createContext(null);
 // --- Initial Data Seeding Logic ---
 const getInitialSeedData = () => {
   const initialUsers = [
-    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false },
-    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: true },
-    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false },
+    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false, globalDiscount: 0, departments: ['Unassigned'] },
+    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: true, globalDiscount: 0, departments: ['Accounting'] },
+    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false, globalDiscount: 5, departments: ['Service and Sales', 'Parts'] },
   ];
   const initialInventory = [
-    { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie` },
-    { id: 'item-02', name: 'Insulated Tumbler', description: 'Keeps your drinks hot or cold for hours.', price: 1200, stock: 100, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Tumbler` },
-    { id: 'item-03', name: 'Wireless Mouse', description: 'Ergonomic wireless mouse for your setup.', price: 1800, stock: 75, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Mouse` },
-    { id: 'item-04', name: 'Empty Item', description: 'This item has 0 stock.', price: 1000, stock: 0, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Empty` },
+    { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie`, discount: 0 },
+    { id: 'item-02', name: 'Insulated Tumbler', description: 'Keeps your drinks hot or cold for hours.', price: 1200, stock: 100, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Tumbler`, discount: 10 },
+    { id: 'item-03', name: 'Wireless Mouse', description: 'Ergonomic wireless mouse for your setup.', price: 1800, stock: 75, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Mouse`, discount: 0 },
+    { id: 'item-04', name: 'Empty Item', description: 'This item has 0 stock.', price: 1000, stock: 0, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Empty`, discount: 0 },
   ];
-  return { initialUsers, initialInventory };
+   const initialInflation = [...DEPARTMENTS, 'Unassigned'].reduce((acc, dept) => {
+        acc[dept.toLowerCase().replace(/ /g, '')] = 0;
+        return acc;
+    }, {});
+
+  return { initialUsers, initialInventory, initialInflation };
 };
 
 const seedDataToFirestore = async () => {
@@ -174,11 +181,11 @@ const seedDataToFirestore = async () => {
     console.log("Seeding initial data to Firestore...");
     try {
         const batch = writeBatch(db);
-        const { initialUsers, initialInventory } = getInitialSeedData();
+        const { initialUsers, initialInventory, initialInflation } = getInitialSeedData();
 
         // Seed config
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
-        batch.set(configRef, { inflation: 0, seeded: true });
+        batch.set(configRef, { inflation: initialInflation, seeded: true });
 
         // Seed users
         initialUsers.forEach(user => {
@@ -213,7 +220,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [purchases, setPurchases] = useState([]);
-  const [inflation, setInflation] = useState(0);
+  const [inflation, setInflation] = useState({});
   const [cart, setCart] = useState({});
 
   // UI State
@@ -263,7 +270,7 @@ function App() {
     const checkAndSeedData = async () => {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
         const configSnap = await getDoc(configRef);
-        if (!configSnap.exists()) {
+        if (!configSnap.exists() || !configSnap.data().inflation) {
             await seedDataToFirestore();
         }
     };
@@ -271,7 +278,7 @@ function App() {
     checkAndSeedData().then(() => {
         // Global Config Listener
         unsubscribers.push(onSnapshot(doc(db, `artifacts/${appId}/public/data/config`, "global"), (doc) => {
-            setInflation(doc.data()?.inflation || 0);
+            setInflation(doc.data()?.inflation || {});
         }));
 
         // Users Listener
@@ -356,7 +363,22 @@ function App() {
     }
   };
   
-  const getPriceWithInflation = (price) => Math.round(price * (1 + inflation / 100));
+  const calculateItemPrice = useCallback((item, user) => {
+      const basePrice = item.price || 0;
+      const itemDiscount = item.discount || 0;
+      
+      const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
+      const inflationRates = userDepartments.map(dept => {
+        const key = dept.toLowerCase().replace(/ /g, '');
+        return inflation[key] ?? inflation.unassigned ?? 0;
+      });
+      const applicableInflation = Math.max(...inflationRates);
+
+      const discountedPrice = basePrice * (1 - itemDiscount / 100);
+      const inflatedPrice = discountedPrice * (1 + applicableInflation / 100);
+      
+      return Math.round(inflatedPrice);
+  }, [inflation]);
   
   const updateCartInFirestore = async (newCartItems) => {
     if (!loggedInUser || !firebaseUser || !db) return;
@@ -401,15 +423,29 @@ function App() {
           return;
       }
       
+      let subtotal = 0;
       const purchaseItems = Object.entries(userCart).map(([itemId, quantity]) => {
           const item = inventory.find(i => i.id === itemId);
+          const purchasePrice = calculateItemPrice(item, user);
+          subtotal += purchasePrice * quantity;
           return {
               id: item.id, name: item.name, originalPrice: item.price,
-              purchasePrice: getPriceWithInflation(item.price), quantity, pictureUrl: item.pictureUrl
+              itemDiscount: item.discount || 0,
+              purchasePrice, // Price after item discount and inflation
+              quantity, pictureUrl: item.pictureUrl
           };
       });
+
+      const userDiscount = user.globalDiscount || 0;
+      const totalCost = Math.round(subtotal * (1 - userDiscount / 100));
       
-      const totalCost = purchaseItems.reduce((acc, item) => acc + item.purchasePrice * item.quantity, 0);
+      const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
+      const inflationRates = userDepartments.map(dept => {
+        const key = dept.toLowerCase().replace(/ /g, '');
+        return inflation[key] ?? inflation.unassigned ?? 0;
+      });
+      const inflationAtPurchase = Math.max(...inflationRates);
+
 
       if (user.points < totalCost) {
           showNotification(`Not enough Pinn Points for ${user.employeeName || user.username}. Required: ${totalCost}, Available: ${user.points}`, 'error');
@@ -420,11 +456,14 @@ function App() {
           userId: user.id, 
           username: user.username,
           employeeName: user.employeeName,
-          items: purchaseItems, 
+          items: purchaseItems,
+          subtotal,
+          userDiscount,
+          inflationAtPurchase: inflationAtPurchase,
           totalCost,
           date: new Date().toISOString(), 
           status: 'pending',
-          redeemedBy: loggedInUser.id, // Track who initiated the purchase
+          redeemedBy: loggedInUser.id,
       };
       
       await addDoc(collection(db, `artifacts/${appId}/public/data/purchases`), newPurchase);
@@ -520,7 +559,7 @@ function App() {
     users, inventory, purchases, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
     isAdmin, pendingPurchasesCount, isUploading, deletingState,
-    showNotification, handleLogin, handleLogout, getPriceWithInflation, addToCart, updateCartQuantity, handlePurchaseRequest,
+    showNotification, handleLogin, handleLogout, calculateItemPrice, addToCart, updateCartQuantity, handlePurchaseRequest,
     handleCSVUpload, showModal, closeModal,
     setInflation: async (newInflation) => {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
@@ -727,19 +766,51 @@ const Modal = (props) => {
     );
 };
 
+const TermsPopup = ({ onAgree }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md text-center transform transition-all animate-fade-in-up">
+        <h2 className="text-2xl font-bold mb-4 text-gray-800">Terms and Conditions</h2>
+        <p className="text-gray-600 mb-6 text-base">
+          By entering this store, I am agreeing to the{' '}
+          <a
+            href="https://docs.google.com/forms/d/e/1FAIpQLScFpQruqzSOYj6Yl6XmH_93C-63BtUkWVyg9EM9Nuc_nGx6XQ/viewform"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-500 hover:text-orange-700 underline font-medium"
+          >
+            Terms and Conditions
+          </a>.
+        </p>
+        <button
+          onClick={onAgree}
+          className="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+        >
+          I Agree & Continue
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
 const Login = (props) => {
   const { handleLogin } = useContext(AppContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [hasAgreed, setHasAgreed] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!hasAgreed) return;
     handleLogin(username, password);
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg">
+      {!hasAgreed && <TermsPopup onAgree={() => setHasAgreed(true)} />}
+
+      <div className={`w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg transition-filter duration-300 ${!hasAgreed ? 'filter blur-sm pointer-events-none' : ''}`}>
         <div className="text-center">
           <h1 className="text-4xl font-bold text-orange-500">Pinnacle Perks</h1>
           <p className="mt-2 text-gray-600">Employee Store Login</p>
@@ -845,11 +916,23 @@ const Navbar = (props) => {
   );
 };
 
-const InflationBar = (props) => {
-    const { inflation } = useContext(AppContext);
-    if (inflation === 0) return null;
-    const color = inflation > 0 ? 'bg-red-500' : 'bg-green-500';
-    const text = inflation > 0 ? `Inflation Alert: Prices are ${inflation}% higher` : `Deflation: Prices are ${Math.abs(inflation)}% lower`;
+const InflationBar = () => {
+    const { inflation, loggedInUser } = useContext(AppContext);
+    if (!loggedInUser || !inflation) return null;
+    
+    const userDepartments = loggedInUser?.departments?.length ? loggedInUser.departments : ['Unassigned'];
+    const inflationRates = userDepartments.map(dept => {
+      const key = dept.toLowerCase().replace(/ /g, '');
+      return inflation[key] ?? inflation.unassigned ?? 0;
+    });
+    const userInflation = Math.max(...inflationRates);
+
+    if (userInflation === 0) return null;
+    
+    const color = userInflation > 0 ? 'bg-red-500' : 'bg-green-500';
+    const text = userInflation > 0 
+        ? `Inflation Alert: An inflation rate of ${userInflation}% is being applied based on your department.` 
+        : `Deflation: A rate of ${Math.abs(userInflation)}% is being applied based on your department.`;
 
     return (
         <div className={`w-full p-2 text-center text-white text-sm font-semibold ${color}`}>
@@ -858,18 +941,21 @@ const InflationBar = (props) => {
     );
 };
 
-const PriceDisplay = ({ originalPrice }) => {
-    const { inflation, getPriceWithInflation } = useContext(AppContext);
-    const adjustedPrice = getPriceWithInflation(originalPrice);
 
-    if (inflation === 0 || originalPrice === adjustedPrice) {
-        return <p className="text-lg font-bold text-orange-500">{originalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>;
-    }
+const PriceDisplay = ({ item }) => {
+    const { calculateItemPrice, loggedInUser } = useContext(AppContext);
+    const finalPrice = calculateItemPrice(item, loggedInUser);
 
     return (
-        <div className="flex items-baseline gap-2">
-             <p className="text-gray-500 line-through text-sm">{originalPrice.toLocaleString()} PP</p>
-            <p className="text-lg font-bold text-orange-500">{adjustedPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
+        <div>
+            {item.discount > 0 ? (
+                <div className="flex items-baseline gap-2">
+                    <p className="text-gray-500 line-through text-sm">{item.price.toLocaleString()} PP</p>
+                    <p className="text-lg font-bold text-orange-500">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
+                </div>
+            ) : (
+                <p className="text-lg font-bold text-orange-500">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
+            )}
         </div>
     );
 };
@@ -877,7 +963,28 @@ const PriceDisplay = ({ originalPrice }) => {
 
 const StorePage = (props) => {
     const { inventory, addToCart } = useContext(AppContext);
-    const availableInventory = inventory.filter(item => item.stock > 0);
+    const [sortKey, setSortKey] = useState('name');
+
+    const sortedInventory = useMemo(() => {
+        const sorted = [...inventory.filter(item => item.stock > 0)];
+        if (sortKey === 'name') {
+            sorted.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortKey === 'price') {
+            sorted.sort((a, b) => a.price - b.price);
+        } else if (sortKey === 'stock') {
+            sorted.sort((a, b) => a.stock - b.stock);
+        }
+        return sorted;
+    }, [inventory, sortKey]);
+
+    const SortButton = ({ value, label }) => (
+        <button
+            onClick={() => setSortKey(value)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${sortKey === value ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+        >
+            {label}
+        </button>
+    );
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -885,17 +992,28 @@ const StorePage = (props) => {
                  <Leaderboard />
             </div>
             <div className="lg:col-span-3">
-                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Welcome to the Store</h1>
-                {availableInventory.length > 0 ? (
+                <div className="flex justify-between items-center mb-6">
+                     <h1 className="text-3xl font-bold text-gray-800">Welcome to the Store</h1>
+                     <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-600">Sort by:</span>
+                        <SortButton value="name" label="Name" />
+                        <SortButton value="price" label="Price" />
+                        <SortButton value="stock" label="Stock" />
+                     </div>
+                </div>
+                {sortedInventory.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {availableInventory.map(item => (
+                        {sortedInventory.map(item => (
                             <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
-                                <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
+                                <div className="relative">
+                                    <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
+                                    {item.discount > 0 && <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">{item.discount}% OFF</div>}
+                                </div>
                                 <div className="p-4 flex flex-col flex-grow">
                                     <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
                                     <p className="text-sm text-gray-600 mt-1 flex-grow">{item.description}</p>
                                     <div className="mt-4">
-                                        <PriceDisplay originalPrice={item.price} />
+                                        <PriceDisplay item={item} />
                                         <p className="text-xs text-gray-500">{item.stock} left in stock</p>
                                     </div>
                                 </div>
@@ -916,18 +1034,21 @@ const StorePage = (props) => {
 };
 
 const CartPage = (props) => {
-    const { cart, inventory, getPriceWithInflation, inflation, updateCartQuantity, handlePurchaseRequest, isAdmin, users, loggedInUser } = useContext(AppContext);
-    const [checkoutForUser, setCheckoutForUser] = useState(loggedInUser.id);
+    const { cart, inventory, calculateItemPrice, updateCartQuantity, handlePurchaseRequest, isAdmin, users, loggedInUser } = useContext(AppContext);
+    const [checkoutForUserId, setCheckoutForUserId] = useState(loggedInUser.id);
+    
+    const checkoutUser = users.find(u => u.id === checkoutForUserId) || loggedInUser;
+    const userDiscount = checkoutUser.globalDiscount || 0;
 
     const cartItems = Object.entries(cart).map(([itemId, quantity]) => {
-            const item = inventory.find(i => i.id === itemId);
-            if (!item) return null;
-            return { ...item, quantity };
-        }).filter(Boolean);
+        const item = inventory.find(i => i.id === itemId);
+        if (!item) return null;
+        return { ...item, quantity, finalPrice: calculateItemPrice(item, checkoutUser) };
+    }).filter(Boolean);
 
-    const subtotal = cartItems.reduce((acc, item) => acc + getPriceWithInflation(item.price) * item.quantity, 0);
-
-    const handleCheckout = () => handlePurchaseRequest(isAdmin ? checkoutForUser : null);
+    const subtotal = cartItems.reduce((acc, item) => acc + item.finalPrice * item.quantity, 0);
+    const discountAmount = Math.round(subtotal * (userDiscount / 100));
+    const total = subtotal - discountAmount;
     
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -935,44 +1056,42 @@ const CartPage = (props) => {
             {cartItems.length === 0 ? <p className="text-gray-600">Your cart is empty.</p> : (
                 <div>
                     <div className="space-y-4">
-                        {cartItems.map(item => {
-                            const adjustedPrice = getPriceWithInflation(item.price);
-                            return (
-                                <div key={item.id} className="flex items-center justify-between border-b pb-4">
-                                    <div className="flex items-center"><img src={item.pictureUrl} alt={item.name} className="h-20 w-20 rounded-md object-cover mr-4" />
-                                        <div><h3 className="font-semibold text-lg">{item.name}</h3>
-                                            <div className="flex items-baseline gap-2">
-                                                {inflation !== 0 && adjustedPrice !== item.price && <p className="text-gray-500 line-through text-sm">{item.price.toLocaleString()} PP</p>}
-                                                <p className="text-gray-600">{adjustedPrice.toLocaleString()} PP</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center border rounded-md">
-                                            <button onClick={() => updateCartQuantity(item.id, item.quantity - 1)} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-l-md"><MinusCircle size={16}/></button>
-                                            <span className="px-4 py-1 font-semibold">{item.quantity}</span>
-                                            <button onClick={() => updateCartQuantity(item.id, item.quantity + 1)} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-md"><PlusCircle size={16}/></button>
-                                        </div>
-                                        <p className="font-semibold w-24 text-right">{(adjustedPrice * item.quantity).toLocaleString()} PP</p>
-                                        <button onClick={() => updateCartQuantity(item.id, 0)} className="text-red-500 hover:text-red-700"><XCircle size={20}/></button>
-                                    </div>
+                        {cartItems.map(item => (
+                            <div key={item.id} className="flex items-center justify-between border-b pb-4">
+                                <div className="flex items-center">
+                                  <img src={item.pictureUrl} alt={item.name} className="h-20 w-20 rounded-md object-cover mr-4" />
+                                  <div>
+                                    <h3 className="font-semibold text-lg">{item.name}</h3>
+                                    <PriceDisplay item={item} />
+                                  </div>
                                 </div>
-                            );
-                        })}
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center border rounded-md">
+                                        <button onClick={() => updateCartQuantity(item.id, item.quantity - 1)} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-l-md"><MinusCircle size={16}/></button>
+                                        <span className="px-4 py-1 font-semibold">{item.quantity}</span>
+                                        <button onClick={() => updateCartQuantity(item.id, item.quantity + 1)} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-md"><PlusCircle size={16}/></button>
+                                    </div>
+                                    <p className="font-semibold w-24 text-right">{(item.finalPrice * item.quantity).toLocaleString()} PP</p>
+                                    <button onClick={() => updateCartQuantity(item.id, 0)} className="text-red-500 hover:text-red-700"><XCircle size={20}/></button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <div className="mt-6 text-right">
-                        <p className="text-2xl font-bold">Total: {subtotal.toLocaleString()} PP</p>
+                    <div className="mt-6 text-right space-y-2">
+                        <p className="text-xl">Subtotal: {subtotal.toLocaleString()} PP</p>
+                        {userDiscount > 0 && <p className="text-lg text-green-600">Employee Discount ({userDiscount}%): -{discountAmount.toLocaleString()} PP</p>}
+                        <p className="text-2xl font-bold">Total: {total.toLocaleString()} PP</p>
                         {isAdmin && (
                             <div className="mt-4 flex justify-end items-center gap-2">
                                 <label htmlFor="checkoutUser" className="text-sm font-medium">Checkout for Employee:</label>
-                                <select id="checkoutUser" value={checkoutForUser} onChange={e => setCheckoutForUser(e.target.value)} className="p-2 border rounded-md">
+                                <select id="checkoutUser" value={checkoutForUserId} onChange={e => setCheckoutForUserId(e.target.value)} className="p-2 border rounded-md">
                                     <option value={loggedInUser.id}>Myself (admin)</option>
-                                    {users.filter(u => u.role === 'employee').map(u => <option key={u.id} value={u.id}>{u.employeeName || u.username}</option>)}
+                                    {users.filter(u => u.role === 'employee').sort((a,b) => (a.employeeName || a.username).localeCompare(b.employeeName || b.username)).map(u => <option key={u.id} value={u.id}>{u.employeeName || u.username}</option>)}
                                 </select>
                             </div>
                         )}
-                        <button onClick={handleCheckout} className="mt-4 bg-orange-500 text-white font-bold py-3 px-8 rounded-md hover:bg-orange-600 transition-colors">
-                            {isAdmin && checkoutForUser !== loggedInUser.id ? `Checkout for Employee` : `Request Purchase`}
+                        <button onClick={() => handlePurchaseRequest(checkoutForUserId)} className="mt-4 bg-orange-500 text-white font-bold py-3 px-8 rounded-md hover:bg-orange-600 transition-colors">
+                            {isAdmin && checkoutForUserId !== loggedInUser.id ? `Checkout for ${checkoutUser.employeeName}` : `Request Purchase`}
                         </button>
                     </div>
                 </div>
@@ -1003,7 +1122,7 @@ const ProfilePage = () => {
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
+            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg flex flex-col items-center text-center">
                 <div className="relative group">
                     <img src={loggedInUser.pictureUrl} alt="Profile" className="h-40 w-40 rounded-full object-cover border-4 border-orange-500" onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Error`; }}/>
                     <button onClick={() => fileInputRef.current.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1013,6 +1132,12 @@ const ProfilePage = () => {
                 </div>
                 <h2 className="mt-4 text-3xl font-bold">{loggedInUser.employeeName || loggedInUser.username}</h2>
                 <p className="text-gray-500">@{loggedInUser.username} | <span className="capitalize">{loggedInUser.role}</span></p>
+                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {(loggedInUser.departments && loggedInUser.departments.length > 0) ? loggedInUser.departments.map(dept => (
+                        <span key={dept} className="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full">{dept}</span>
+                    )) : <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1 rounded-full">Unassigned</span>}
+                </div>
+                {loggedInUser.globalDiscount > 0 && <p className="mt-2 text-sm font-semibold text-green-600 bg-green-100 px-3 py-1 rounded-full">{loggedInUser.globalDiscount}% Global Discount</p>}
                 <div className="mt-6 bg-orange-100 text-orange-700 p-4 rounded-lg text-center w-full">
                     <p className="text-lg">Available Balance</p>
                     <p className="text-4xl font-bold">{loggedInUser.points.toLocaleString()} PP</p>
@@ -1084,7 +1209,7 @@ const InventoryManagement = () => {
 
     const handleAddNewItem = () => {
       const newItemId = `item-${Date.now()}`;
-      const newItem = { id: newItemId, name: 'New Item', description: 'New Description', price: 100, stock: 10, pictureUrl: 'https://placehold.co/300x300/F5F5F5/4A4A4A?text=New' };
+      const newItem = { id: newItemId, name: 'New Item', description: 'New Description', price: 100, stock: 10, discount: 0, pictureUrl: 'https://placehold.co/300x300/F5F5F5/4A4A4A?text=New' };
       addItem(newItem);
       setEditingItem(newItem);
     };
@@ -1111,7 +1236,7 @@ const InventoryManagement = () => {
     };
     
     const downloadCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "id,name,description,price,stock,pictureUrl\n";
+        const csvContent = "data:text/csv;charset=utf-8," + "id,name,description,price,stock,discount,pictureUrl\n";
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -1143,7 +1268,7 @@ const InventoryManagement = () => {
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3">Description</th><th className="px-6 py-3">Price</th><th className="px-6 py-3">Stock</th><th className="px-6 py-3">Actions</th></tr>
+                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3">Description</th><th className="px-6 py-3">Price</th><th className="px-6 py-3">Stock</th><th className="px-6 py-3">Discount</th><th className="px-6 py-3">Actions</th></tr>
                     </thead>
                     <tbody>
                         {inventory.map(item => editingItem?.id === item.id ? (
@@ -1160,6 +1285,7 @@ const InventoryManagement = () => {
                                 <td className="px-6 py-4"><textarea value={editingItem.description} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="p-1 border rounded-md w-full" rows="3"></textarea></td>
                                 <td className="px-6 py-4"><input type="number" value={editingItem.price} onChange={e => setEditingItem({...editingItem, price: Number(e.target.value)})} className="p-1 border rounded-md w-24" /></td>
                                 <td className="px-6 py-4"><input type="number" value={editingItem.stock} onChange={e => setEditingItem({...editingItem, stock: Number(e.target.value)})} className="p-1 border rounded-md w-20" /></td>
+                                <td className="px-6 py-4"><input type="number" value={editingItem.discount} onChange={e => setEditingItem({...editingItem, discount: Number(e.target.value)})} className="p-1 border rounded-md w-20" /></td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={handleSave} className="p-2 text-green-600 hover:text-green-800"><Save size={20}/></button>
                                     <button onClick={() => setEditingItem(null)} className="p-2 text-gray-600 hover:text-gray-800"><X size={20}/></button>
@@ -1170,6 +1296,7 @@ const InventoryManagement = () => {
                                 <td className="px-6 py-4 flex items-center gap-4"><img src={item.pictureUrl} alt={item.name} className="w-16 h-16 object-cover rounded-md"/><div><div className="font-medium text-gray-900">{item.name}</div></div></td>
                                 <td className="px-6 py-4 text-xs text-gray-500 max-w-sm truncate">{item.description}</td>
                                 <td className="px-6 py-4">{item.price.toLocaleString()}</td><td className="px-6 py-4">{item.stock}</td>
+                                <td className="px-6 py-4">{item.discount || 0}%</td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingItem({...item})} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     <button onClick={() => handleDelete(item.id, item.name)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === item.id}>
@@ -1190,6 +1317,60 @@ const EmployeeManagement = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
     const [selectedUsers, setSelectedUsers] = useState(new Set());
+    const [sortConfig, setSortConfig] = useState({ key: 'employeeName', direction: 'ascending' });
+
+    const handleDepartmentChange = (user, department, isChecked) => {
+        const currentDepts = new Set(user.departments?.filter(d => d !== 'Unassigned'));
+        if (isChecked) {
+            currentDepts.add(department);
+        } else {
+            currentDepts.delete(department);
+        }
+        
+        const newDepartments = Array.from(currentDepts);
+        const updatedUser = {
+            ...user,
+            departments: newDepartments.length > 0 ? newDepartments : ['Unassigned']
+        };
+        updateUser(updatedUser);
+    };
+
+    const sortedUsers = useMemo(() => {
+        let sortableUsers = [...users];
+        if (sortConfig.key) {
+            sortableUsers.sort((a, b) => {
+                let aValue = a[sortConfig.key];
+                let bValue = b[sortConfig.key];
+
+                if (sortConfig.key === 'employeeName') {
+                    aValue = a.employeeName || a.username;
+                    bValue = b.employeeName || b.username;
+                }
+
+                if (sortConfig.key === 'departments') {
+                    aValue = (a.departments || []).join(', ');
+                    bValue = (b.departments || []).join(', ');
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableUsers;
+    }, [users, sortConfig]);
+
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
     const handleSave = () => {
         updateUser(editingUser);
@@ -1224,6 +1405,8 @@ const EmployeeManagement = () => {
             password: 'password123', 
             role: 'employee', 
             points: 0, 
+            globalDiscount: 0,
+            departments: ['Unassigned'],
             pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N`,
             forcePasswordChange: true
         };
@@ -1277,7 +1460,7 @@ const EmployeeManagement = () => {
     };
 
     const downloadEmployeesCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "username,employeeName,password,role,points,pictureUrl\n";
+        const csvContent = "data:text/csv;charset=utf-8," + "username,employeeName,password,role,points,globalDiscount,departments,pictureUrl\n";
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -1329,36 +1512,16 @@ const EmployeeManagement = () => {
                     <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                         <tr>
                             <th className="px-6 py-3"></th>
-                            <th className="px-6 py-3">User</th>
-                            <th className="px-6 py-3">Role</th>
-                            <th className="px-6 py-3">Points</th>
+                            <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('employeeName')}>User</th>
+                            <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('departments')}>Department(s)</th>
+                            <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('points')}>Points</th>
+                            <th className="px-6 py-3">Global Discount</th>
                             <th className="px-6 py-3">Add/Deduct Points</th>
                             <th className="px-6 py-3">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {users.map(user => editingUser?.id === user.id ? (
-                            <tr key={user.id} className="bg-yellow-50">
-                                <td></td>
-                                <td className="px-6 py-4">
-                                     <div className="relative group w-24 h-24 mb-2">
-                                        <img src={editingUser.pictureUrl} alt="item" className="w-24 h-24 object-cover rounded-md"/>
-                                        <label className="absolute inset-0 bg-black bg-opacity-50 rounded-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                            <Camera size={24}/><input type="file" accept="image/*" onChange={handlePictureChange} className="hidden" />
-                                        </label>
-                                    </div>
-                                    <input type="text" placeholder="Display Name" value={editingUser.employeeName} onChange={e => setEditingUser({...editingUser, employeeName: e.target.value})} className="p-1 border rounded-md w-full mb-2" />
-                                    <input type="text" placeholder="Username" value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="p-1 border rounded-md w-full" />
-                                </td>
-                                <td className="px-6 py-4 capitalize">{user.role}</td>
-                                <td className="px-6 py-4"><input type="number" value={editingUser.points} onChange={e => setEditingUser({...editingUser, points: Number(e.target.value)})} className="p-1 border rounded-md w-24" /></td>
-                                <td></td>
-                                <td className="px-6 py-4 flex items-center gap-2">
-                                    <button onClick={handleSave} className="p-2 text-green-600 hover:text-green-800"><Save size={20}/></button>
-                                    <button onClick={() => setEditingUser(null)} className="p-2 text-gray-600 hover:text-gray-800"><X size={20}/></button>
-                                </td>
-                            </tr>
-                        ) : (
+                        {sortedUsers.map(user => (
                             <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
                                 <td className="px-6 py-4">
                                     {user.role !== 'admin' && (
@@ -1377,8 +1540,23 @@ const EmployeeManagement = () => {
                                         <div className="text-xs text-gray-500">@{user.username}</div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 capitalize">{user.role}</td>
+                                <td className="px-6 py-4">
+                                    <div className="flex flex-col space-y-1">
+                                    {DEPARTMENTS.map(dept => (
+                                        <label key={dept} className="flex items-center space-x-2 text-xs">
+                                            <input
+                                                type="checkbox"
+                                                checked={user.departments?.includes(dept)}
+                                                onChange={(e) => handleDepartmentChange(user, dept, e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                            />
+                                            <span>{dept}</span>
+                                        </label>
+                                    ))}
+                                    </div>
+                                </td>
                                 <td className="px-6 py-4 font-semibold">{user.points.toLocaleString()}</td>
+                                <td className="px-6 py-4 font-semibold text-green-600">{user.globalDiscount || 0}%</td>
                                 <td className="px-6 py-4">
                                     {user.role === 'employee' && (
                                       <div className="flex items-center">
@@ -1388,7 +1566,6 @@ const EmployeeManagement = () => {
                                     )}
                                 </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
-                                    <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
                                       <>
                                         <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password" disabled={deletingState.type === 'reset-password' && deletingState.id === user.id}>
@@ -1457,14 +1634,19 @@ const ApprovalQueue = () => {
 
 const SettingsPage = () => {
     const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deletingState } = useContext(AppContext);
-    const [localInflation, setLocalInflation] = useState(inflation);
+    const [localInflation, setLocalInflation] = useState(inflation || {});
 
     useEffect(() => {
-        setLocalInflation(inflation);
+        setLocalInflation(inflation || {});
     }, [inflation]);
 
+    const handleInflationChange = (department, value) => {
+        const departmentKey = department.toLowerCase().replace(/ /g, '');
+        setLocalInflation(prev => ({ ...prev, [departmentKey]: Number(value) }));
+    };
+
     const handleSave = () => {
-        setGlobalInflation(Number(localInflation));
+        setGlobalInflation(localInflation);
         showNotification('Settings saved successfully!', 'success');
     };
     
@@ -1482,14 +1664,22 @@ const SettingsPage = () => {
         <AdminPageContainer title="Global Settings" icon={<Settings className="mr-3"/>}>
             <div className="space-y-8">
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-4">Global Inflation Rate</h3>
-                    <p className="text-sm text-gray-600 mb-4">Set a global percentage to increase or decrease all item prices. Use a negative number for deflation.</p>
-                    <div className="flex items-center gap-4">
-                        <input type="number" value={localInflation} onChange={e => setLocalInflation(e.target.value)} className="p-2 border rounded-md w-40"/>
-                        <span className="text-xl font-semibold">%</span>
+                    <h3 className="text-xl font-semibold mb-4">Department Inflation Rates</h3>
+                    <p className="text-sm text-gray-600 mb-4">Set a specific inflation percentage for each department. Use a negative number for deflation.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[...DEPARTMENTS, 'Unassigned'].map(dept => {
+                            const deptKey = dept.toLowerCase().replace(/ /g, '');
+                            return (
+                                <div key={dept} className="flex items-center gap-4">
+                                    <label className="w-40 font-medium">{dept}:</label>
+                                    <input type="number" value={localInflation[deptKey] || 0} onChange={e => handleInflationChange(dept, e.target.value)} className="p-2 border rounded-md w-40"/>
+                                    <span className="text-xl font-semibold">%</span>
+                                </div>
+                            )
+                        })}
                     </div>
                      <div className="flex justify-end mt-6">
-                        <button onClick={handleSave} className="bg-orange-500 text-white font-bold py-3 px-6 rounded-md hover:bg-orange-600 transition-colors">Save Inflation</button>
+                        <button onClick={handleSave} className="bg-orange-500 text-white font-bold py-3 px-6 rounded-md hover:bg-orange-600 transition-colors">Save Inflation Settings</button>
                     </div>
                 </div>
 

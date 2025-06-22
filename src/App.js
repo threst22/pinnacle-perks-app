@@ -1151,10 +1151,24 @@ const EmployeeManagement = () => {
     const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading } = useContext(AppContext);
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
+    const [selectedUsers, setSelectedUsers] = useState(new Set());
 
     const handleSave = () => {
         updateUser(editingUser);
         setEditingUser(null);
+    };
+    
+    const handlePictureChange = (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith("image/")) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditingUser(prev => ({...prev, pictureUrl: reader.result}));
+            };
+            reader.readAsDataURL(file);
+        } else {
+            showNotification('Please select a valid image file.', 'error');
+        }
     };
 
     const handleAddPoints = (user) => {
@@ -1178,18 +1192,40 @@ const EmployeeManagement = () => {
         showNotification(`New user "${newUser.username}" created.`, 'success');
     };
     
-    const handleDelete = (userId, displayName) => {
-        if(users.find(u => u.id === userId)?.role === 'admin') {
-            showNotification('Cannot delete an admin user.', 'error');
+    const handleToggleUserSelection = (userId) => {
+        setSelectedUsers(prev => {
+            const newSelection = new Set(prev);
+            if (newSelection.has(userId)) {
+                newSelection.delete(userId);
+            } else {
+                newSelection.add(userId);
+            }
+            return newSelection;
+        });
+    };
+
+    const handleDeleteSelected = () => {
+        const usersToDelete = Array.from(selectedUsers);
+        if(usersToDelete.length === 0) {
+            showNotification("No users selected.", "info");
             return;
         }
+
         showModal(
-            'Delete User', 
-            <span>Are you sure you want to delete <strong>{displayName}</strong>?</span>, 
-            () => deleteUser(userId, displayName)
+            `Delete ${usersToDelete.length} User(s)`,
+            `Are you sure you want to delete ${usersToDelete.length} selected employee(s)? This action cannot be undone.`,
+            async () => {
+                const batch = writeBatch(db);
+                usersToDelete.forEach(userId => {
+                    batch.delete(doc(db, `artifacts/${appId}/public/data/users`, userId));
+                });
+                await batch.commit();
+                showNotification(`${usersToDelete.length} user(s) deleted.`, "info");
+                setSelectedUsers(new Set());
+            }
         );
     };
-    
+
     const downloadPointsCSVTemplate = () => {
         const csvContent = "data:text/csv;charset=utf-8," + "id,points_to_add\n";
         const encodedUri = encodeURI(csvContent);
@@ -1235,22 +1271,35 @@ const EmployeeManagement = () => {
                     {isUploading ? 'Uploading...' : 'Upload New Employees'}
                     <input type="file" accept=".csv" onChange={onEmployeesFileSelect} disabled={isUploading} className="hidden" />
                 </label>
-                <button onClick={downloadPointsCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Points Template</button>
-                 <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
-                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
-                    {isUploading ? 'Uploading...' : 'Upload Points Update'}
-                    <input type="file" accept=".csv" onChange={onPointsFileSelect} disabled={isUploading} className="hidden" />
-                </label>
+                {selectedUsers.size > 0 && (
+                     <button onClick={handleDeleteSelected} disabled={isUploading} className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 flex items-center disabled:bg-gray-400">
+                        <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
+                    </button>
+                )}
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-                        <tr><th className="px-6 py-3">User</th><th className="px-6 py-3">Role</th><th className="px-6 py-3">Points</th><th className="px-6 py-3">Add/Deduct</th><th className="px-6 py-3">Actions</th></tr>
+                        <tr>
+                            <th className="px-6 py-3"></th>
+                            <th className="px-6 py-3">User</th>
+                            <th className="px-6 py-3">Role</th>
+                            <th className="px-6 py-3">Points</th>
+                            <th className="px-6 py-3">Add/Deduct Points</th>
+                            <th className="px-6 py-3">Actions</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {users.map(user => editingUser?.id === user.id ? (
                             <tr key={user.id} className="bg-yellow-50">
+                                <td></td>
                                 <td className="px-6 py-4">
+                                     <div className="relative group w-24 h-24 mb-2">
+                                        <img src={editingUser.pictureUrl} alt="item" className="w-24 h-24 object-cover rounded-md"/>
+                                        <label className="absolute inset-0 bg-black bg-opacity-50 rounded-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                            <Camera size={24}/><input type="file" accept="image/*" onChange={handlePictureChange} className="hidden" />
+                                        </label>
+                                    </div>
                                     <input type="text" placeholder="Display Name" value={editingUser.employeeName} onChange={e => setEditingUser({...editingUser, employeeName: e.target.value})} className="p-1 border rounded-md w-full mb-2" />
                                     <input type="text" placeholder="Username" value={editingUser.username} onChange={e => setEditingUser({...editingUser, username: e.target.value})} className="p-1 border rounded-md w-full" />
                                 </td>
@@ -1264,6 +1313,16 @@ const EmployeeManagement = () => {
                             </tr>
                         ) : (
                             <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
+                                <td className="px-6 py-4">
+                                    {user.role !== 'admin' && (
+                                        <input 
+                                            type="checkbox"
+                                            checked={selectedUsers.has(user.id)}
+                                            onChange={() => handleToggleUserSelection(user.id)}
+                                            className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                        />
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 flex items-center gap-3">
                                     <img src={user.pictureUrl} alt={user.username} className="w-10 h-10 rounded-full object-cover"/>
                                     <div>
@@ -1283,7 +1342,6 @@ const EmployeeManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
-                                    {user.role !== 'admin' && <button onClick={() => handleDelete(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
                                 </td>
                             </tr>
                         ))}

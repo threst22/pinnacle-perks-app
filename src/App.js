@@ -472,6 +472,7 @@ function App() {
             const employeesToDelete = users.filter(u => u.role === 'employee');
             if (employeesToDelete.length === 0) {
                 showNotification("No employees to delete.", "info");
+                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -498,6 +499,7 @@ function App() {
             const querySnapshot = await getDocs(purchasesCollectionRef);
             if(querySnapshot.empty) {
                 showNotification("No purchase activities to delete.", "info");
+                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -1222,7 +1224,7 @@ const EmployeeManagement = () => {
         if (file && file.type.startsWith("image/")) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setEditingUser(prev => ({...prev, pictureUrl: reader.result}));
+                setEditingItem(prev => ({...prev, pictureUrl: reader.result}));
             };
             reader.readAsDataURL(file);
         } else {

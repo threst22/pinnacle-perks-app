@@ -216,8 +216,8 @@ function App() {
     if (loggedInUser && users.length > 0) {
         const currentUserData = users.find(u => u.id === loggedInUser.id);
         if (currentUserData) {
-            // A deep comparison is expensive, a shallow one on a key field is often enough
-            if (currentUserData.pictureUrl !== loggedInUser.pictureUrl || currentUserData.points !== loggedInUser.points) {
+            // Use JSON.stringify for a simple but effective deep comparison to prevent unnecessary re-renders
+            if (JSON.stringify(currentUserData) !== JSON.stringify(loggedInUser)) {
                 setLoggedInUser(currentUserData);
             }
         } else {
@@ -825,7 +825,6 @@ const InventoryManagement = () => {
     const handleAddNewItem = () => {
       const newItem = { id: `item-${Date.now()}`, name: 'New Item', description: 'New Description', price: 100, stock: 10, pictureUrl: 'https://placehold.co/300x300/F5F5F5/4A4A4A?text=New' };
       addItem(newItem);
-      setEditingItem(newItem);
     };
     
     const handleDelete = (itemId, itemName) => showModal('Delete Item', `Are you sure you want to delete "${itemName}"? This action cannot be undone.`, () => deleteItem(itemId));

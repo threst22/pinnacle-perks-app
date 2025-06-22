@@ -163,6 +163,7 @@ const getInitialSeedData = () => {
     { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie` },
     { id: 'item-02', name: 'Insulated Tumbler', description: 'Keeps your drinks hot or cold for hours.', price: 1200, stock: 100, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Tumbler` },
     { id: 'item-03', name: 'Wireless Mouse', description: 'Ergonomic wireless mouse for your setup.', price: 1800, stock: 75, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Mouse` },
+    { id: 'item-04', name: 'Empty Item', description: 'This item has 0 stock.', price: 1000, stock: 0, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Empty` },
   ];
   return { initialUsers, initialInventory };
 };
@@ -810,6 +811,8 @@ const PriceDisplay = ({ originalPrice }) => {
 
 const StorePage = (props) => {
     const { inventory, addToCart } = useContext(AppContext);
+    const availableInventory = inventory.filter(item => item.stock > 0);
+
     return (
         <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -821,26 +824,30 @@ const StorePage = (props) => {
                 </div>
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6 mt-8">Welcome to the Store</h1>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {inventory.filter(item => item.stock > 0).map(item => (
-                    <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
-                        <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
-                        <div className="p-4 flex flex-col flex-grow">
-                            <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
-                            <p className="text-sm text-gray-600 mt-1 flex-grow">{item.description}</p>
-                            <div className="mt-4">
-                                <PriceDisplay originalPrice={item.price} />
-                                <p className="text-xs text-gray-500">{item.stock} left in stock</p>
+            {availableInventory.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    {availableInventory.map(item => (
+                        <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
+                            <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
+                            <div className="p-4 flex flex-col flex-grow">
+                                <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
+                                <p className="text-sm text-gray-600 mt-1 flex-grow">{item.description}</p>
+                                <div className="mt-4">
+                                    <PriceDisplay originalPrice={item.price} />
+                                    <p className="text-xs text-gray-500">{item.stock} left in stock</p>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50">
+                                <button onClick={() => addToCart(item.id)} className="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
+                                    Add to Cart
+                                </button>
                             </div>
                         </div>
-                        <div className="p-4 bg-gray-50">
-                            <button onClick={() => addToCart(item.id)} disabled={item.stock === 0} className="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                                {item.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-center text-gray-500 py-10">The store is currently empty. Check back later!</p>
+            )}
         </div>
     );
 };
@@ -1345,7 +1352,11 @@ const EmployeeManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
-                                    {user.role !== 'admin' && <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
+                                    {user.role !== 'admin' && (
+                                      <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800">
+                                          <XCircle size={20}/>
+                                      </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

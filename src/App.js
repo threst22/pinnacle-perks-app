@@ -155,8 +155,6 @@ function App() {
         const usersQuery = query(collection(db, `artifacts/${appId}/public/data/users`));
         unsubscribers.push(onSnapshot(usersQuery, (snapshot) => {
             const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // *** DEBUGGING LINE ADDED HERE ***
-            console.log("Users fetched from Firestore:", usersData);
             setUsers(usersData);
         }, (error) => console.error("Users listener error:", error)));
 

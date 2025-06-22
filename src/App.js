@@ -4,7 +4,7 @@ import React, { useState, useEffect, createContext, useContext, useRef, useCallb
 // These are assumed to be available in the environment
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, runTransaction } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, runTransaction, getDocs } from 'firebase/firestore';
 
 // --- SVG Icons (Replacement for lucide-react) ---
 const Icon = ({ children, className = '', size = 24 }) => (
@@ -484,6 +484,28 @@ function App() {
             showNotification(`Failed to delete employees: ${error.message}`, 'error');
         }
     };
+    
+    const deleteAllPurchases = async () => {
+        try {
+            const purchasesCollectionRef = collection(db, `artifacts/${appId}/public/data/purchases`);
+            const querySnapshot = await getDocs(purchasesCollectionRef);
+            if(querySnapshot.empty) {
+                showNotification("No purchase activities to delete.", "info");
+                return;
+            }
+
+            const batch = writeBatch(db);
+            querySnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            showNotification("All purchase activities have been reset.", "success");
+        } catch (error) {
+            console.error("Error deleting all purchases:", error);
+            showNotification(`Failed to reset activities: ${error.message}`, 'error');
+        }
+    };
 
   const contextValue = {
     users, inventory, purchases, inflation, cart, firebaseUser,
@@ -519,6 +541,7 @@ function App() {
         }
     },
     deleteAllEmployees,
+    deleteAllPurchases,
     updateItem: async (itemToUpdate) => {
         const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, itemToUpdate.id);
         await updateDoc(itemRef, itemToUpdate);
@@ -1414,7 +1437,7 @@ const ApprovalQueue = () => {
 };
 
 const SettingsPage = () => {
-    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees } = useContext(AppContext);
+    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deleteAllPurchases } = useContext(AppContext);
     const [localInflation, setLocalInflation] = useState(inflation);
 
     useEffect(() => {
@@ -1434,6 +1457,14 @@ const SettingsPage = () => {
         );
     };
 
+    const handleResetActivities = () => {
+        showModal(
+            'Reset All Activities',
+            'Are you sure you want to delete all purchase history? This cannot be undone.',
+            deleteAllPurchases
+        );
+    };
+
     return (
         <AdminPageContainer title="Global Settings" icon={<Settings className="mr-3"/>}>
             <div className="space-y-8">
@@ -1449,17 +1480,26 @@ const SettingsPage = () => {
                     </div>
                 </div>
 
-                <div className="p-6 border-2 border-red-500 rounded-lg">
-                    <h3 className="text-xl font-semibold text-red-700 mb-4">Danger Zone</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                        This action is destructive and cannot be undone. This will permanently remove all users with the 'employee' role.
-                    </p>
-                    <button 
-                        onClick={handleDeleteAllEmployees} 
-                        className="bg-red-600 text-white font-bold py-3 px-6 rounded-md hover:bg-red-700 transition-colors"
-                    >
-                        Delete All Employees
-                    </button>
+                <div className="p-6 border-2 border-red-500 rounded-lg space-y-4">
+                    <h3 className="text-xl font-semibold text-red-700 mb-2">Danger Zone</h3>
+                    <div>
+                        <p className="text-sm text-gray-600 mb-2">This will permanently remove all users with the 'employee' role.</p>
+                        <button 
+                            onClick={handleDeleteAllEmployees} 
+                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors"
+                        >
+                            Delete All Employees
+                        </button>
+                    </div>
+                     <div>
+                        <p className="text-sm text-gray-600 mb-2">This will permanently delete all purchase history from the 'Latest Activity' feed.</p>
+                        <button 
+                            onClick={handleResetActivities} 
+                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors"
+                        >
+                            Reset All Activities
+                        </button>
+                    </div>
                 </div>
             </div>
         </AdminPageContainer>

@@ -367,12 +367,15 @@ function App() {
       const basePrice = item.price || 0;
       const itemDiscount = item.discount || 0;
       
-      const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
-      const inflationRates = userDepartments.map(dept => {
-        const key = dept.toLowerCase().replace(/ /g, '');
-        return inflation[key] ?? inflation.unassigned ?? 0;
-      });
-      const applicableInflation = Math.max(...inflationRates);
+      let applicableInflation = 0;
+      if(user?.role !== 'admin') {
+          const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
+          const inflationRates = userDepartments.map(dept => {
+            const key = dept.toLowerCase().replace(/ /g, '');
+            return inflation[key] ?? inflation.unassigned ?? 0;
+          });
+          applicableInflation = Math.max(...inflationRates);
+      }
 
       const discountedPrice = basePrice * (1 - itemDiscount / 100);
       const inflatedPrice = discountedPrice * (1 + applicableInflation / 100);
@@ -439,12 +442,15 @@ function App() {
       const userDiscount = user.globalDiscount || 0;
       const totalCost = Math.round(subtotal * (1 - userDiscount / 100));
       
-      const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
-      const inflationRates = userDepartments.map(dept => {
-        const key = dept.toLowerCase().replace(/ /g, '');
-        return inflation[key] ?? inflation.unassigned ?? 0;
-      });
-      const inflationAtPurchase = Math.max(...inflationRates);
+      let inflationAtPurchase = 0;
+      if(user?.role !== 'admin') {
+        const userDepartments = user?.departments?.length ? user.departments : ['Unassigned'];
+        const inflationRates = userDepartments.map(dept => {
+            const key = dept.toLowerCase().replace(/ /g, '');
+            return inflation[key] ?? inflation.unassigned ?? 0;
+        });
+        inflationAtPurchase = Math.max(...inflationRates);
+      }
 
 
       if (user.points < totalCost) {
@@ -569,7 +575,7 @@ function App() {
         try {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
             await updateDoc(userRef, userToUpdate);
-            showNotification("User updated successfully.", "success");
+            // No notification here to avoid spamming on every checkbox click
         } catch (error) {
             console.error("Error updating user:", error);
             showNotification(`Failed to update user: ${error.message}`, 'error');
@@ -918,7 +924,7 @@ const Navbar = (props) => {
 
 const InflationBar = () => {
     const { inflation, loggedInUser } = useContext(AppContext);
-    if (!loggedInUser || !inflation) return null;
+    if (!loggedInUser || !inflation || loggedInUser.role === 'admin') return null;
     
     const userDepartments = loggedInUser?.departments?.length ? loggedInUser.departments : ['Unassigned'];
     const inflationRates = userDepartments.map(dept => {
@@ -942,13 +948,14 @@ const InflationBar = () => {
 };
 
 
-const PriceDisplay = ({ item }) => {
+const PriceDisplay = ({ item, checkoutUser }) => {
     const { calculateItemPrice, loggedInUser } = useContext(AppContext);
-    const finalPrice = calculateItemPrice(item, loggedInUser);
+    const userForPrice = checkoutUser || loggedInUser;
+    const finalPrice = calculateItemPrice(item, userForPrice);
 
     return (
         <div>
-            {item.discount > 0 ? (
+            {finalPrice !== item.price ? (
                 <div className="flex items-baseline gap-2">
                     <p className="text-gray-500 line-through text-sm">{item.price.toLocaleString()} PP</p>
                     <p className="text-lg font-bold text-orange-500">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
@@ -1062,7 +1069,7 @@ const CartPage = (props) => {
                                   <img src={item.pictureUrl} alt={item.name} className="h-20 w-20 rounded-md object-cover mr-4" />
                                   <div>
                                     <h3 className="font-semibold text-lg">{item.name}</h3>
-                                    <PriceDisplay item={item} />
+                                    <PriceDisplay item={item} checkoutUser={checkoutUser} />
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -1314,7 +1321,6 @@ const InventoryManagement = () => {
 
 const EmployeeManagement = () => {
     const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading, deletingState, resetPassword } = useContext(AppContext);
-    const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
     const [selectedUsers, setSelectedUsers] = useState(new Set());
     const [sortConfig, setSortConfig] = useState({ key: 'employeeName', direction: 'ascending' });
@@ -1370,24 +1376,6 @@ const EmployeeManagement = () => {
             direction = 'descending';
         }
         setSortConfig({ key, direction });
-    };
-
-    const handleSave = () => {
-        updateUser(editingUser);
-        setEditingUser(null);
-    };
-    
-    const handlePictureChange = (e) => {
-        const file = e.target.files[0];
-        if (file && file.type.startsWith("image/")) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setEditingUser(prev => ({...prev, pictureUrl: reader.result}));
-            };
-            reader.readAsDataURL(file);
-        } else {
-            showNotification('Please select a valid image file.', 'error');
-        }
     };
 
     const handleAddPoints = (user) => {
@@ -1448,40 +1436,6 @@ const EmployeeManagement = () => {
         );
     };
 
-    const downloadPointsCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "id,points_to_add\n";
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "points_update_template.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const downloadEmployeesCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "username,employeeName,password,role,points,globalDiscount,departments,pictureUrl\n";
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "employees_template.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-    
-    const onPointsFileSelect = (e) => {
-        const file = e.target.files[0];
-        if (file) handleCSVUpload(file, POINTS_UPLOAD_URL);
-        e.target.value = null;
-    };
-    
-    const onEmployeesFileSelect = (e) => {
-        const file = e.target.files[0];
-        if (file) handleCSVUpload(file, EMPLOYEES_UPLOAD_URL);
-        e.target.value = null;
-    };
-
     const handleResetPassword = (user) => {
         showModal(
             'Reset Password',
@@ -1495,12 +1449,6 @@ const EmployeeManagement = () => {
         <AdminPageContainer title="Employee Management" icon={<Users className="mr-3"/>}>
             <div className="mb-4 flex items-center gap-4 flex-wrap">
                 <button onClick={handleAddNewUser} disabled={isUploading} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee Manually</button>
-                <button onClick={downloadEmployeesCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Employee Template</button>
-                <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
-                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
-                    {isUploading ? 'Uploading...' : 'Upload New Employees'}
-                    <input type="file" accept=".csv" onChange={onEmployeesFileSelect} disabled={isUploading} className="hidden" />
-                </label>
                 {selectedUsers.size > 0 && (
                      <button onClick={handleDeleteSelected} disabled={isUploading} className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 flex items-center disabled:bg-gray-400">
                         <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})

@@ -474,8 +474,14 @@ function App() {
         const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/users`), newUser);
         await updateDoc(docRef, { id: docRef.id });
     },
-    deleteUser: async (userId) => {
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
+    deleteUser: async (userId, displayName) => {
+        try {
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
+            showNotification(`User "${displayName}" deleted successfully.`, 'info');
+        } catch (error) {
+            console.error("Error deleting user: ", error);
+            showNotification(`Failed to delete user: ${error.message}`, 'error');
+        }
     },
     updateItem: async (itemToUpdate) => {
         const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, itemToUpdate.id);
@@ -1093,12 +1099,16 @@ const EmployeeManagement = () => {
         showNotification(`New user "${newUser.username}" created.`, 'success');
     };
     
-    const handleDelete = (userId, username) => {
+    const handleDelete = (userId, displayName) => {
         if(users.find(u => u.id === userId)?.role === 'admin') {
             showNotification('Cannot delete an admin user.', 'error');
             return;
         }
-        showModal('Delete User', <span>Are you sure you want to delete <strong>{username}</strong>?</span>, () => deleteUser(userId));
+        showModal(
+            'Delete User', 
+            <span>Are you sure you want to delete <strong>{displayName}</strong>?</span>, 
+            () => deleteUser(userId, displayName)
+        );
     };
     
     const downloadPointsCSVTemplate = () => {
@@ -1194,7 +1204,7 @@ const EmployeeManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
-                                    {user.role !== 'admin' && <button onClick={() => handleDelete(user.id, user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
+                                    {user.role !== 'admin' && <button onClick={() => handleDelete(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
                                 </td>
                             </tr>
                         ))}

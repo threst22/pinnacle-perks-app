@@ -631,7 +631,7 @@ function App() {
         try {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
             await updateDoc(userRef, {
-                password: "password123",
+                password: "password",
                 forcePasswordChange: true,
             });
             showNotification("Password has been reset.", 'success');

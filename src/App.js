@@ -884,15 +884,6 @@ const EmployeeManagement = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
 
-    useEffect(() => {
-        if(editingUser){
-            const currentUserData = users.find(u => u.id === editingUser.id);
-            if(currentUserData && JSON.stringify(currentUserData) !== JSON.stringify(editingUser)){
-                setEditingUser(currentUserData);
-            }
-        }
-    }, [users, editingUser]);
-
     const handleSave = () => {
         updateUser(editingUser);
         setEditingUser(null);

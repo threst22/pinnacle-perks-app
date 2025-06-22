@@ -684,6 +684,7 @@ function App() {
           {currentPage === 'store' && <StorePage />}
           {currentPage === 'cart' && <CartPage />}
           {currentPage === 'profile' && <ProfilePage />}
+          {currentPage === 'change-password' && <ChangePasswordPage />}
           {isAdmin && currentPage === 'admin/inventory' && <InventoryManagement />}
           {isAdmin && currentPage === 'admin/employees' && <EmployeeManagement />}
           {isAdmin && currentPage === 'admin/approvals' && <ApprovalQueue />}
@@ -876,33 +877,37 @@ const StorePage = (props) => {
     const availableInventory = inventory.filter(item => item.stock > 0);
 
     return (
-        <div className="space-y-8">
-            <Leaderboard />
-            <h1 className="text-3xl font-bold text-gray-800 mb-6 mt-8">Welcome to the Store</h1>
-            {availableInventory.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    {availableInventory.map(item => (
-                        <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
-                            <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
-                            <div className="p-4 flex flex-col flex-grow">
-                                <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
-                                <p className="text-sm text-gray-600 mt-1 flex-grow">{item.description}</p>
-                                <div className="mt-4">
-                                    <PriceDisplay originalPrice={item.price} />
-                                    <p className="text-xs text-gray-500">{item.stock} left in stock</p>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-1">
+                 <Leaderboard />
+            </div>
+            <div className="lg:col-span-3">
+                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Welcome to the Store</h1>
+                {availableInventory.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {availableInventory.map(item => (
+                            <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
+                                <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
+                                <div className="p-4 flex flex-col flex-grow">
+                                    <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
+                                    <p className="text-sm text-gray-600 mt-1 flex-grow">{item.description}</p>
+                                    <div className="mt-4">
+                                        <PriceDisplay originalPrice={item.price} />
+                                        <p className="text-xs text-gray-500">{item.stock} left in stock</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-gray-50">
+                                    <button onClick={() => addToCart(item.id)} className="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
+                                        Add to Cart
+                                    </button>
                                 </div>
                             </div>
-                            <div className="p-4 bg-gray-50">
-                                <button onClick={() => addToCart(item.id)} className="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
-                                    Add to Cart
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-center text-gray-500 py-10">The store is currently empty. Check back later!</p>
-            )}
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-gray-500 py-10">The store is currently empty. Check back later!</p>
+                )}
+            </div>
         </div>
     );
 };
@@ -1505,7 +1510,7 @@ const SettingsPage = () => {
                         </button>
                     </div>
                      <div>
-                        <p className="text-sm text-gray-600 mb-2">This will permanently delete all purchase history from the 'Latest Activity' feed.</p>
+                        <p className="text-sm text-gray-600 mb-2">This will permanently delete all purchase history.</p>
                         <button 
                             onClick={handleResetActivities} 
                             className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center w-48"

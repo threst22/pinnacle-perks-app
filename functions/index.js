@@ -8,19 +8,23 @@ const db = admin.firestore();
 
 /**
  * A helper function to verify the Firebase Auth token.
- * Throws an error if the token is invalid.
+ * Throws a standard Error with a status code for onRequest functions.
  * @param {string} authorizationHeader The Authorization header from the request.
  */
 const verifyToken = async (authorizationHeader) => {
   if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
-    throw new functions.https.HttpsError('unauthenticated', 'No token provided.');
+    const error = new Error('No token provided.');
+    error.status = 401; // Unauthorized
+    throw error;
   }
   const idToken = authorizationHeader.split('Bearer ')[1];
   try {
     await admin.auth().verifyIdToken(idToken);
-  } catch (error) {
-    console.error("Auth Error:", error);
-    throw new functions.https.HttpsError('unauthenticated', error.message || 'Invalid token.');
+  } catch (err) {
+    console.error("Auth Error:", err);
+    const error = new Error(err.message || 'Invalid token.');
+    error.status = 401; // Unauthorized
+    throw error;
   }
 };
 
@@ -54,6 +58,7 @@ const parseCsv = (csvBuffer) => {
  * Cloud Function to handle inventory CSV uploads.
  */
 exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
+    // The cors handler will automatically handle the OPTIONS preflight request.
     cors(req, res, async () => {
         if (req.method !== 'POST') {
           return res.status(405).send({ message: 'Method Not Allowed' });
@@ -84,10 +89,8 @@ exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
           return res.status(200).send({ message: `Successfully processed ${inventoryData.length} inventory items.` });
         } catch (error) {
           console.error("Inventory Upload Error:", error.message);
-          if (error.code && error.code.startsWith('functions')) {
-            return res.status(401).send({ message: "Unauthorized", error: error.message });
-          }
-          return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+          const status = error.status || 500;
+          return res.status(status).send({ message: "Error processing request", error: error.message });
         }
     });
 });
@@ -126,10 +129,8 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
           return res.status(200).send({ message: `Successfully uploaded ${employeeData.length} new employees.` });
         } catch (error) {
           console.error("Employee Upload Error:", error.message);
-          if (error.code && error.code.startsWith('functions')) {
-              return res.status(401).send({ message: "Unauthorized", error: error.message });
-          }
-          return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+          const status = error.status || 500;
+          return res.status(status).send({ message: "Error processing request", error: error.message });
         }
     });
 });
@@ -169,10 +170,8 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
           return res.status(200).send({ message: `Successfully processed ${pointsData.length} points updates.` });
         } catch (error) {
           console.error("Points Upload Error:", error.message);
-          if (error.code && error.code.startsWith('functions')) {
-              return res.status(401).send({ message: "Unauthorized", error: error.message });
-          }
-          return res.status(500).send({ message: "Error processing CSV file.", error: error.message });
+          const status = error.status || 500;
+          return res.status(status).send({ message: "Error processing request", error: error.message });
         }
     });
 });

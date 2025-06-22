@@ -628,6 +628,7 @@ function App() {
         }
     },
     resetPassword: async (userId) => {
+        setDeletingState({ type: 'reset-password', id: userId });
         try {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
             await updateDoc(userRef, {
@@ -638,6 +639,8 @@ function App() {
         } catch(error) {
             console.error("Error resetting password:", error);
             showNotification(`Failed to reset password: ${error.message}`, 'error');
+        } finally {
+            setDeletingState({ type: null, id: null });
         }
     }
   };
@@ -656,7 +659,7 @@ function App() {
         <AppContext.Provider value={contextValue}>
           <div className="bg-gray-100 min-h-screen font-sans">
               <Notification />
-              <ChangePasswordPage />
+              <ChangePasswordPage isForced={true} />
           </div>
       </AppContext.Provider>
       )
@@ -1388,9 +1391,11 @@ const EmployeeManagement = () => {
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
                                       <>
-                                        <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password"><KeyRound size={20}/></button>
-                                        <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === user.id}>
-                                            {deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
+                                        <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password" disabled={deletingState.type === 'reset-password' && deletingState.id === user.id}>
+                                            {deletingState.type === 'reset-password' && deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <KeyRound size={20}/>}
+                                        </button>
+                                        <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.type === 'user' && deletingState.id === user.id}>
+                                            {deletingState.type === 'user' && deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
                                         </button>
                                       </>
                                     )}
@@ -1451,7 +1456,7 @@ const ApprovalQueue = () => {
 };
 
 const SettingsPage = () => {
-    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deleteAllPurchases, deletingState } = useContext(AppContext);
+    const { inflation, setInflation: setGlobalInflation, showNotification, showModal, deleteAllEmployees, deletingState } = useContext(AppContext);
     const [localInflation, setLocalInflation] = useState(inflation);
 
     useEffect(() => {
@@ -1471,16 +1476,7 @@ const SettingsPage = () => {
         );
     };
 
-    const handleResetActivities = () => {
-        showModal(
-            'Reset All Activities',
-            'Are you sure you want to delete all purchase history? This cannot be undone.',
-            deleteAllPurchases
-        );
-    };
-
     const isDeletingAllEmployees = deletingState.type === 'all-employees';
-    const isDeletingAllPurchases = deletingState.type === 'all-purchases';
 
     return (
         <AdminPageContainer title="Global Settings" icon={<Settings className="mr-3"/>}>
@@ -1509,16 +1505,6 @@ const SettingsPage = () => {
                             {isDeletingAllEmployees ? <Loader2 className="animate-spin" /> : 'Delete All Employees'}
                         </button>
                     </div>
-                     <div>
-                        <p className="text-sm text-gray-600 mb-2">This will permanently delete all purchase history.</p>
-                        <button 
-                            onClick={handleResetActivities} 
-                            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center w-48"
-                            disabled={isDeletingAllPurchases}
-                        >
-                             {isDeletingAllPurchases ? <Loader2 className="animate-spin" /> : 'Reset All Activities'}
-                        </button>
-                    </div>
                 </div>
             </div>
         </AdminPageContainer>
@@ -1533,8 +1519,8 @@ const Footer = () => (
     </footer>
 );
 
-const ChangePasswordPage = () => {
-    const { updateUser, loggedInUser, showNotification } = useContext(AppContext);
+const ChangePasswordPage = ({isForced = false}) => {
+    const { updateUser, loggedInUser, showNotification, setCurrentPage } = useContext(AppContext);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -1554,14 +1540,21 @@ const ChangePasswordPage = () => {
             forcePasswordChange: false,
         });
         showNotification("Password changed successfully!", "success");
+        if(!isForced) {
+            setCurrentPage('profile');
+        }
     };
+    
+    const pageTitle = isForced ? "Create a New Password" : "Change Your Password";
+    const pageSubTitle = isForced ? "For security, please create a new password." : "Enter a new password below.";
+
 
     return (
         <div className="flex items-center justify-center min-h-screen">
             <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-orange-500">Change Your Password</h1>
-                    <p className="mt-2 text-gray-600">For security, please create a new password.</p>
+                    <h1 className="text-3xl font-bold text-orange-500">{pageTitle}</h1>
+                    <p className="mt-2 text-gray-600">{pageSubTitle}</p>
                 </div>
                 <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                     <div className="rounded-md shadow-sm -space-y-px">

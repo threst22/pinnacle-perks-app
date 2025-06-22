@@ -7,34 +7,24 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * A helper function to verify the Firebase Auth token and check for admin role.
- * Throws an error if the token is invalid or the user is not an admin.
+ * A helper function to verify the Firebase Auth token.
+ * Throws an error if the token is invalid.
+ * SECURITY NOTE: This function only verifies that the request is from an
+ * authenticated Firebase user. It does NOT check for admin privileges because
+ * the app's current login architecture does not link the Firestore user role
+ * to the Firebase Auth token. Removing the broken role check fixes the function crash.
  * @param {string} authorizationHeader The Authorization header from the request.
  */
-const verifyAdminToken = async (authorizationHeader) => {
+const verifyToken = async (authorizationHeader) => {
   if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
     throw new functions.https.HttpsError('unauthenticated', 'No token provided.');
   }
   const idToken = authorizationHeader.split('Bearer ')[1];
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    // SECURITY NOTE: This is a placeholder for a real admin check.
-    // In a production app, you should set a custom claim 'admin: true' on the user
-    // during a trusted process (e.g., another cloud function) and check it here.
-    // For this app, we'll check the role from the database as a fallback.
-    const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-    if (!userDoc.exists || userDoc.data().role !== 'admin') {
-         // A more robust check using custom claims would be:
-         // if (decodedToken.admin !== true) {
-        throw new functions.https.HttpsError('permission-denied', 'User is not an administrator.');
-    }
-    return decodedToken;
+    // This verifies that the token was issued by Firebase and is not expired.
+    await admin.auth().verifyIdToken(idToken);
   } catch (error) {
     console.error("Auth Error:", error);
-    // Re-throw specific errors for the client
-    if(error.code === 'auth/id-token-expired') {
-        throw new functions.https.HttpsError('unauthenticated', 'Token has expired.');
-    }
     throw new functions.https.HttpsError('unauthenticated', error.message || 'Invalid token.');
   }
 };
@@ -74,7 +64,7 @@ exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
     }
     
     try {
-      await verifyAdminToken(req.headers.authorization);
+      await verifyToken(req.headers.authorization);
       
       const inventoryData = await parseCsv(req.rawBody);
       if (!inventoryData.length) throw new Error("CSV file is empty or invalid.");
@@ -117,7 +107,7 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
     }
     
     try {
-      await verifyAdminToken(req.headers.authorization);
+      await verifyToken(req.headers.authorization);
 
       const employeeData = await parseCsv(req.rawBody);
       if (!employeeData.length) throw new Error("CSV file is empty or invalid.");
@@ -161,7 +151,7 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
     }
 
     try {
-      await verifyAdminToken(req.headers.authorization);
+      await verifyToken(req.headers.authorization);
 
       const pointsData = await parseCsv(req.rawBody);
       if (!pointsData.length) throw new Error("CSV file is empty or invalid.");

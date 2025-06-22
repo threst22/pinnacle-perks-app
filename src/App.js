@@ -63,7 +63,7 @@ const seedDataToFirestore = async () => {
     // Seed users
     initialUsers.forEach(user => {
         const userRef = doc(collection(db, `artifacts/${appId}/public/data/users`));
-        batch.set(userRef, { ...user, id: userRef.id });
+        batch.set(userRef, { ...user, id: userRef.id }); // Using auto-generated doc ID as id
     });
 
     // Seed inventory
@@ -91,7 +91,7 @@ function App() {
   const [cart, setCart] = useState({});
 
   // UI State
-  const [loggedInUser, setLoggedInUser] = useState(null);
+  const [loggedInUser, setLoggedInUser] = useState(null); // Local app user profile
   const [currentPage, setCurrentPage] = useState('store');
   const [notification, setNotification] = useState({ message: '', type: '', show: false });
   const [modal, setModal] = useState({ isOpen: false, title: '', content: '', onConfirm: () => {} });
@@ -346,21 +346,37 @@ function App() {
 
                 if (isApproved) {
                     const userRef = doc(db, `artifacts/${appId}/public/data/users`, purchaseData.userId);
-                    const userDoc = await transaction.get(userRef);
+                    
+                    // --- REFACTORED READ PHASE ---
+                    const itemRefs = purchaseData.items.map(item => doc(db, `artifacts/${appId}/public/data/inventory`, item.id));
+                    const [userDoc, ...itemDocs] = await Promise.all([
+                        transaction.get(userRef),
+                        ...itemRefs.map(ref => transaction.get(ref))
+                    ]);
+
+                    // --- VALIDATION PHASE ---
                     if (!userDoc.exists()) throw "User not found!";
                     const userData = userDoc.data();
 
                     if(userData.points < purchaseData.totalCost) throw "Insufficient points.";
 
-                    for (const item of purchaseData.items) {
-                        const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, item.id);
-                        const itemDoc = await transaction.get(itemRef);
-                        if (!itemDoc.exists() || itemDoc.data().stock < item.quantity) {
-                            throw `Insufficient stock for ${item.name}.`;
+                    for (let i = 0; i < itemDocs.length; i++) {
+                        const itemDoc = itemDocs[i];
+                        const purchasedItem = purchaseData.items[i];
+                        if (!itemDoc.exists() || itemDoc.data().stock < purchasedItem.quantity) {
+                            throw `Insufficient stock for ${purchasedItem.name}.`;
                         }
-                        transaction.update(itemRef, { stock: itemDoc.data().stock - item.quantity });
                     }
+                    
+                    // --- WRITE PHASE ---
                     transaction.update(userRef, { points: userData.points - purchaseData.totalCost });
+
+                    for (let i = 0; i < itemDocs.length; i++) {
+                        const itemRef = itemRefs[i];
+                        const itemDoc = itemDocs[i];
+                        const purchasedItem = purchaseData.items[i];
+                        transaction.update(itemRef, { stock: itemDoc.data().stock - purchasedItem.quantity });
+                    }
                 }
                 
                 transaction.update(purchaseRef, { status: isApproved ? 'approved' : 'rejected' });

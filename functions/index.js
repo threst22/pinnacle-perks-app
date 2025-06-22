@@ -18,11 +18,12 @@ const parseCsv = (csvBuffer) => {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        if (results.errors.length) {
-          reject(results.errors);
-        } else {
-          resolve(results.data);
+        if (results.errors.length > 0 && results.data.length === 0) {
+          const firstError = results.errors.find(e => e.code !== 'TooManyFields' && e.code !== 'TooFewFields');
+          const errorMessage = firstError ? firstError.message : "Invalid CSV format.";
+          return reject(new Error(errorMessage));
         }
+        resolve(results.data);
       },
       error: (error) => reject(error),
     });
@@ -31,33 +32,36 @@ const parseCsv = (csvBuffer) => {
 
 /**
  * Cloud Function to handle inventory CSV uploads.
- * It expects a CSV with columns: id, name, description, price, stock.
+ * It expects a CSV with columns: id, name, description, price, stock, pictureUrl.
  */
 exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
-      return res.status(405).send("Method Not Allowed");
+      return res.status(405).send({ message: "Method Not Allowed" });
     }
 
     try {
       const inventoryData = await parseCsv(req.rawBody);
+      if (!inventoryData.length) throw new Error("CSV file is empty or invalid.");
+
       const batch = db.batch();
       const inventoryCollection = db.collection(`artifacts/${req.query.appId}/public/data/inventory`);
 
       inventoryData.forEach((item) => {
-        const docRef = inventoryCollection.doc(item.id || `item-${Date.now()}-${Math.random()}`);
+        if(!item.id) return; // Skip rows without an ID
+        const docRef = inventoryCollection.doc(item.id);
         batch.set(docRef, {
           name: item.name || "No Name",
           description: item.description || "",
           price: Number(item.price) || 0,
           stock: Number(item.stock) || 0,
           pictureUrl: item.pictureUrl || `https://placehold.co/300x300/F5F5F5/4A4A4A?text=New`,
-          id: docRef.id,
-        });
+          id: item.id,
+        }, { merge: true }); // Use merge to update existing items or create new ones
       });
 
       await batch.commit();
-      res.status(200).send({ message: `Successfully uploaded ${inventoryData.length} inventory items.` });
+      res.status(200).send({ message: `Successfully processed ${inventoryData.length} inventory items.` });
     } catch (error) {
       console.error("Inventory Upload Error:", error);
       res.status(500).send({ message: "Error processing CSV file.", error: error.message });
@@ -67,23 +71,26 @@ exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
 
 /**
  * Cloud Function to handle new employee CSV uploads.
- * It expects a CSV with columns: username, password, role, points.
+ * It expects a CSV with columns: username, password, role, points, pictureUrl.
  */
 exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
-      return res.status(405).send("Method Not Allowed");
+      return res.status(405).send({ message: "Method Not Allowed" });
     }
     
     try {
       const employeeData = await parseCsv(req.rawBody);
+      if (!employeeData.length) throw new Error("CSV file is empty or invalid.");
+
       const batch = db.batch();
       const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
 
       employeeData.forEach((emp) => {
+        if(!emp.username) return; // Skip rows without a username
         const docRef = usersCollection.doc();
         batch.set(docRef, {
-            username: emp.username || `user-${Date.now()}`,
+            username: emp.username,
             password: emp.password || "password123",
             role: emp.role || "employee",
             points: Number(emp.points) || 0,
@@ -109,11 +116,13 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
 exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     if (req.method !== "POST") {
-      return res.status(405).send("Method Not Allowed");
+      return res.status(405).send({ message: "Method Not Allowed" });
     }
 
     try {
       const pointsData = await parseCsv(req.rawBody);
+      if (!pointsData.length) throw new Error("CSV file is empty or invalid.");
+      
       const batch = db.batch();
       const usersCollection = db.collection(`artifacts/${req.query.appId}/public/data/users`);
 
@@ -123,7 +132,8 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
         const docRef = usersCollection.doc(update.id);
         const amount = Number(update.points_to_add);
         
-        // Use a transaction-like update with FieldValue to prevent race conditions
+        if(isNaN(amount)) continue; // Skip invalid numbers
+
         batch.update(docRef, {
             points: admin.firestore.FieldValue.increment(amount)
         });

@@ -1,13 +1,124 @@
 import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
-import { Camera, Upload, Download, X, Edit, Save, PlusCircle, MinusCircle, CheckCircle, XCircle, FileText, UserPlus, ShoppingCart, LogOut, Settings, Users, Box, BarChart2, Loader2 } from 'lucide-react';
 
 // --- Firebase SDK Imports ---
+// These are assumed to be available in the environment
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, runTransaction } from 'firebase/firestore';
 
+// --- SVG Icons (Replacement for lucide-react) ---
+const Icon = ({ children, className = '', size = 24 }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        {children}
+    </svg>
+);
+
+const Camera = ({ className, size }) => (
+    <Icon className={className} size={size}>
+        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+        <circle cx="12" cy="13" r="3" />
+    </Icon>
+);
+
+const Upload = ({ className, size }) => (
+    <Icon className={className} size={size}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+    </Icon>
+);
+
+const Download = ({ className, size }) => (
+    <Icon className={className} size={size}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </Icon>
+);
+
+const X = ({ className, size }) => (
+    <Icon className={className} size={size}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Icon>
+);
+
+const Edit = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></Icon>
+);
+
+const Save = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></Icon>
+);
+
+const PlusCircle = ({ className, size }) => (
+    <Icon className={className} size={size}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></Icon>
+);
+
+const MinusCircle = ({ className, size }) => (
+    <Icon className={className} size={size}><circle cx="12" cy="12" r="10" /><line x1="8" y1="12" x2="16" y2="12" /></Icon>
+);
+
+const CheckCircle = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></Icon>
+);
+
+const XCircle = ({ className, size }) => (
+    <Icon className={className} size={size}><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></Icon>
+);
+
+const FileText = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></Icon>
+);
+
+const UserPlus = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" /></Icon>
+);
+
+const ShoppingCart = ({ className, size }) => (
+    <Icon className={className} size={size}><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></Icon>
+);
+
+const LogOut = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>
+);
+
+const Settings = ({ className, size }) => (
+    <Icon className={className} size={size}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1.51-1V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1h.44a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></Icon>
+);
+
+const Users = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Icon>
+);
+
+const Box = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></Icon>
+);
+
+const BarChart2 = ({ className, size }) => (
+    <Icon className={className} size={size}><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></Icon>
+);
+
+const Loader2 = ({ className, size }) => (
+    <Icon className={className} size={size}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></Icon>
+);
+
+
 // --- Firebase Configuration & Initialization ---
 let app, auth, db;
+// Cloud Function URLs - Replace with your deployed function URLs
+const CLOUD_FUNCTIONS_URL = "https://us-central1-pinnacle2-ab305.cloudfunctions.net";
+const INVENTORY_UPLOAD_URL = `${CLOUD_FUNCTIONS_URL}/uploadInventoryCsv`;
+const EMPLOYEES_UPLOAD_URL = `${CLOUD_FUNCTIONS_URL}/uploadEmployeesCsv`;
+const POINTS_UPLOAD_URL = `${CLOUD_FUNCTIONS_URL}/uploadPointsCsv`;
 
 try {
     // These global variables are expected to be injected by the hosting environment.
@@ -53,27 +164,31 @@ const getInitialSeedData = () => {
 const seedDataToFirestore = async () => {
     if (!db) return;
     console.log("Seeding initial data to Firestore...");
-    const batch = writeBatch(db);
-    const { initialUsers, initialInventory } = getInitialSeedData();
+    try {
+        const batch = writeBatch(db);
+        const { initialUsers, initialInventory } = getInitialSeedData();
 
-    // Seed config
-    const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
-    batch.set(configRef, { inflation: 0, seeded: true });
+        // Seed config
+        const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
+        batch.set(configRef, { inflation: 0, seeded: true });
 
-    // Seed users
-    initialUsers.forEach(user => {
-        const userRef = doc(collection(db, `artifacts/${appId}/public/data/users`));
-        batch.set(userRef, { ...user, id: userRef.id }); // Using auto-generated doc ID as id
-    });
+        // Seed users
+        initialUsers.forEach(user => {
+            const userRef = doc(collection(db, `artifacts/${appId}/public/data/users`));
+            batch.set(userRef, { ...user, id: userRef.id }); // Using auto-generated doc ID as id
+        });
 
-    // Seed inventory
-    initialInventory.forEach(item => {
-        const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, item.id);
-        batch.set(itemRef, item);
-    });
+        // Seed inventory
+        initialInventory.forEach(item => {
+            const itemRef = doc(db, `artifacts/${appId}/public/data/inventory`, item.id);
+            batch.set(itemRef, item);
+        });
 
-    await batch.commit();
-    console.log("Seeding complete.");
+        await batch.commit();
+        console.log("Seeding complete.");
+    } catch (error) {
+        console.error("Seeding failed:", error);
+    }
 };
 
 // --- Main App Component ---
@@ -82,6 +197,7 @@ function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
 
   // App Data State
   const [users, setUsers] = useState([]);
@@ -269,7 +385,7 @@ function App() {
   const handlePurchaseRequest = async (userIdForCheckout = null) => {
       const checkoutUserId = isAdmin && userIdForCheckout ? userIdForCheckout : loggedInUser.id;
       const user = users.find(u => u.id === checkoutUserId);
-      const userCart = checkoutUserId === loggedInUser.id ? cart : {};
+      const userCart = cart;
       
       if (Object.keys(userCart).length === 0) {
           showNotification('Cart is empty.', 'error');
@@ -287,7 +403,7 @@ function App() {
       const totalCost = purchaseItems.reduce((acc, item) => acc + item.purchasePrice * item.quantity, 0);
 
       if (user.points < totalCost) {
-          showNotification(`Not enough Pinn Points. Required: ${totalCost}, Available: ${user.points}`, 'error');
+          showNotification(`Not enough Pinn Points for ${user.username}. Required: ${totalCost}, Available: ${user.points}`, 'error');
           return;
       }
 
@@ -303,13 +419,45 @@ function App() {
       setCurrentPage('store');
   };
 
+  const handleCSVUpload = async (file, uploadUrl) => {
+    if (!file) return;
+
+    setIsUploading(true);
+    showNotification("Uploading CSV...", "info", 10000);
+
+    try {
+        const token = await auth.currentUser.getIdToken();
+        const response = await fetch(`${uploadUrl}?appId=${appId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/csv',
+                'Authorization': `Bearer ${token}`
+            },
+            body: file
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to upload CSV.');
+        }
+
+        showNotification(result.message, 'success');
+    } catch (error) {
+        console.error("CSV Upload failed:", error);
+        showNotification(error.message, 'error');
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
   const contextValue = {
     users, inventory, purchases, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
-    isAdmin, pendingPurchasesCount,
+    isAdmin, pendingPurchasesCount, isUploading,
     notification, modal,
     showNotification, handleLogin, handleLogout, getPriceWithInflation, addToCart, updateCartQuantity, handlePurchaseRequest,
-    showModal, closeModal,
+    handleCSVUpload, showModal, closeModal,
     setInflation: async (newInflation) => {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
         await updateDoc(configRef, { inflation: newInflation });
@@ -343,18 +491,21 @@ function App() {
                 const purchaseDoc = await transaction.get(purchaseRef);
                 if (!purchaseDoc.exists()) throw "Purchase not found!";
                 const purchaseData = purchaseDoc.data();
+                 if (purchaseData.status !== 'pending') throw "This purchase has already been processed.";
+
 
                 if (isApproved) {
                     const userRef = doc(db, `artifacts/${appId}/public/data/users`, purchaseData.userId);
                     
-                    // --- REFACTORED READ PHASE ---
                     const itemRefs = purchaseData.items.map(item => doc(db, `artifacts/${appId}/public/data/inventory`, item.id));
-                    const [userDoc, ...itemDocs] = await Promise.all([
+                    const docs = await Promise.all([
                         transaction.get(userRef),
                         ...itemRefs.map(ref => transaction.get(ref))
                     ]);
 
-                    // --- VALIDATION PHASE ---
+                    const userDoc = docs[0];
+                    const itemDocs = docs.slice(1);
+
                     if (!userDoc.exists()) throw "User not found!";
                     const userData = userDoc.data();
 
@@ -368,7 +519,6 @@ function App() {
                         }
                     }
                     
-                    // --- WRITE PHASE ---
                     transaction.update(userRef, { points: userData.points - purchaseData.totalCost });
 
                     for (let i = 0; i < itemDocs.length; i++) {
@@ -389,7 +539,6 @@ function App() {
     }
   };
 
-  // --- Render Logic ---
   if (isLoading || !isAuthReady) {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700">
@@ -412,7 +561,7 @@ function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="bg-gray-100 min-h-screen font-sans">
         <Notification />
         <Modal />
         <Navbar />
@@ -441,14 +590,14 @@ const Modal = (props) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
                 <h2 className="text-xl font-bold mb-4">{modal.title}</h2>
-                <p className="text-gray-600 mb-6">{modal.content}</p>
+                <div className="text-gray-600 mb-6">{modal.content}</div>
                 <div className="flex justify-end gap-4">
                     <button onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
                         Cancel
                     </button>
                     <button 
                         onClick={() => {
-                            modal.onConfirm();
+                            if(modal.onConfirm) modal.onConfirm();
                             closeModal();
                         }} 
                         className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">
@@ -517,7 +666,7 @@ const Notification = (props) => {
     const { notification } = useContext(AppContext);
     if (!notification || !notification.show) return null;
 
-    const baseStyle = "fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm flex items-center";
+    const baseStyle = "fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm flex items-center transition-all duration-300 transform-gpu animate-fade-in-right";
     const typeStyles = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
 
     return (
@@ -561,15 +710,15 @@ const Navbar = (props) => {
           </div>
           <div className="flex items-center">
              <div className="mr-4 text-sm text-gray-700 hidden sm:block">
-                <span className="font-semibold">{loggedInUser.points.toLocaleString()}</span>
-                <span className="text-orange-500"> Pinn Points</span>
+               <span className="font-semibold">{loggedInUser.points.toLocaleString()}</span>
+               <span className="text-orange-500"> Pinn Points</span>
              </div>
              <button onClick={() => setCurrentPage('cart')} className="relative mr-4 p-2 rounded-full text-gray-600 hover:text-orange-500 hover:bg-gray-100 focus:outline-none transition-colors">
-                <ShoppingCart/>
-                {cartItemCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-orange-500 text-white rounded-full h-5 w-5 text-xs flex items-center justify-center">{cartItemCount}</span>}
+               <ShoppingCart/>
+               {cartItemCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-orange-500 text-white rounded-full h-5 w-5 text-xs flex items-center justify-center">{cartItemCount}</span>}
              </button>
             <div className="flex items-center ml-2">
-              <img className="h-8 w-8 rounded-full object-cover" src={loggedInUser.pictureUrl} alt={loggedInUser.username} />
+              <img className="h-8 w-8 rounded-full object-cover" src={loggedInUser.pictureUrl} alt={loggedInUser.username} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Err`; }}/>
               <span className="ml-2 text-gray-700 text-sm font-medium hidden md:block">{loggedInUser.username}</span>
             </div>
             <button onClick={handleLogout} className="ml-4 p-2 rounded-full text-gray-600 hover:text-orange-500 hover:bg-gray-100 focus:outline-none transition-colors">
@@ -654,7 +803,7 @@ const CartPage = (props) => {
 
     const subtotal = cartItems.reduce((acc, item) => acc + getPriceWithInflation(item.price) * item.quantity, 0);
 
-    const handleCheckout = () => handlePurchaseRequest(isAdmin ? checkoutForUser : loggedInUser.id);
+    const handleCheckout = () => handlePurchaseRequest(isAdmin ? checkoutForUser : null);
     
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -763,7 +912,6 @@ const ProfilePage = () => {
                     </div>
                 ) : <p className="text-gray-500">No approved purchases yet.</p>}
             </div>
-            <div className="lg:col-span-3"><Leaderboard /></div>
         </div>
     );
 };
@@ -799,20 +947,30 @@ const AdminPageContainer = ({ title, icon, children }) => (
 );
 
 const InventoryManagement = () => {
-    const { inventory, updateItem, addItem, deleteItem, showModal, showNotification } = useContext(AppContext);
+    const { inventory, updateItem, addItem, deleteItem, showModal, showNotification, handleCSVUpload, isUploading } = useContext(AppContext);
     const [editingItem, setEditingItem] = useState(null);
 
     const handleSave = () => {
         updateItem(editingItem);
         setEditingItem(null);
+        showNotification("Item saved successfully!", "success");
     };
 
     const handleAddNewItem = () => {
-      const newItem = { id: `item-${Date.now()}`, name: 'New Item', description: 'New Description', price: 100, stock: 10, pictureUrl: 'https://placehold.co/300x300/F5F5F5/4A4A4A?text=New' };
+      const newItemId = `item-${Date.now()}`;
+      const newItem = { id: newItemId, name: 'New Item', description: 'New Description', price: 100, stock: 10, pictureUrl: 'https://placehold.co/300x300/F5F5F5/4A4A4A?text=New' };
       addItem(newItem);
+      setEditingItem(newItem);
     };
     
-    const handleDelete = (itemId, itemName) => showModal('Delete Item', `Are you sure you want to delete "${itemName}"? This action cannot be undone.`, () => deleteItem(itemId));
+    const handleDelete = (itemId, itemName) => showModal(
+        'Delete Item', 
+        <span>Are you sure you want to delete <strong>"{itemName}"</strong>? This action cannot be undone.</span>, 
+        () => {
+            deleteItem(itemId);
+            showNotification(`"${itemName}" has been deleted.`, 'info');
+        }
+    );
 
     const handlePictureChange = (e) => {
         const file = e.target.files[0];
@@ -828,7 +986,7 @@ const InventoryManagement = () => {
     };
     
     const downloadCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "id,name,description,price,stock\n";
+        const csvContent = "data:text/csv;charset=utf-8," + "id,name,description,price,stock,pictureUrl\n";
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -838,18 +996,23 @@ const InventoryManagement = () => {
         document.body.removeChild(link);
     };
 
-    const handleCSVUpload = (e) => {
-      showNotification('CSV Upload is a placeholder. A server function is required for a full implementation.', 'info');
+    const onFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            handleCSVUpload(file, INVENTORY_UPLOAD_URL);
+        }
+        e.target.value = null; // Reset file input
     };
 
     return (
         <AdminPageContainer title="Inventory Management" icon={<Box className="mr-3"/>}>
             <div className="mb-4 flex items-center gap-4 flex-wrap">
-                <button onClick={handleAddNewItem} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center"><PlusCircle size={18} className="mr-2"/>Add New Item</button>
-                <button onClick={downloadCSVTemplate} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center"><Download size={18} className="mr-2"/>Download Template</button>
-                <label className="bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer">
-                  <Upload size={18} className="mr-2"/>Upload CSV
-                  <input type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
+                <button onClick={handleAddNewItem} disabled={isUploading} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center disabled:bg-gray-400"><PlusCircle size={18} className="mr-2"/>Add New Item</button>
+                <button onClick={downloadCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Template</button>
+                <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
+                    {isUploading ? 'Uploading...' : 'Upload CSV'}
+                    <input type="file" accept=".csv" onChange={onFileSelect} disabled={isUploading} className="hidden" />
                 </label>
             </div>
             <div className="overflow-x-auto">
@@ -896,7 +1059,7 @@ const InventoryManagement = () => {
 };
 
 const EmployeeManagement = () => {
-    const { users, updateUser, addUser, deleteUser, showModal, showNotification } = useContext(AppContext);
+    const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading } = useContext(AppContext);
     const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
 
@@ -910,12 +1073,13 @@ const EmployeeManagement = () => {
         if (amount === 0) return;
         updateUser({ ...user, points: user.points + amount });
         setPointsToAdd(prev => ({...prev, [user.id]: ''}));
-        showNotification(`${amount} points added to ${user.username}`, 'success');
+        showNotification(`${amount.toLocaleString()} points added to ${user.username}`, 'success');
     };
     
     const handleAddNewUser = () => {
-        const newUser = { username: 'new.user', password: 'password123', role: 'employee', points: 0, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N` };
+        const newUser = { username: `new.user.${Date.now()}`.slice(-15), password: 'password123', role: 'employee', points: 0, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=N` };
         addUser(newUser);
+        showNotification(`New user "${newUser.username}" created.`, 'success');
     };
     
     const handleDelete = (userId, username) => {
@@ -923,34 +1087,59 @@ const EmployeeManagement = () => {
             showNotification('Cannot delete an admin user.', 'error');
             return;
         }
-        showModal('Delete User', `Are you sure you want to delete ${username}?`, () => deleteUser(userId));
+        showModal('Delete User', <span>Are you sure you want to delete <strong>{username}</strong>?</span>, () => deleteUser(userId));
     };
     
-    const createDownloadLink = (content, filename) => {
-        const encodedUri = encodeURI(content);
+    const downloadPointsCSVTemplate = () => {
+        const csvContent = "data:text/csv;charset=utf-8," + "id,points_to_add\n";
+        const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", filename);
+        link.setAttribute("download", "points_update_template.csv");
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-    const downloadPointsCSV = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "id,username,points_to_add\n";
-        createDownloadLink(csvContent, "points_update_template.csv");
+    const downloadEmployeesCSVTemplate = () => {
+        const csvContent = "data:text/csv;charset=utf-8," + "username,password,role,points,pictureUrl\n";
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "employees_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
     
-    const handleCSVUpload = () => showNotification('CSV Upload is a placeholder.', 'info');
+    const onPointsFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) handleCSVUpload(file, POINTS_UPLOAD_URL);
+        e.target.value = null;
+    };
+    
+    const onEmployeesFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) handleCSVUpload(file, EMPLOYEES_UPLOAD_URL);
+        e.target.value = null;
+    };
+
 
     return (
         <AdminPageContainer title="Employee Management" icon={<Users className="mr-3"/>}>
             <div className="mb-4 flex items-center gap-4 flex-wrap">
-                <button onClick={handleAddNewUser} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center"><UserPlus size={18} className="mr-2"/>Add New Employee</button>
-                <button onClick={downloadPointsCSV} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center"><Download size={18} className="mr-2"/>Download Points Template</button>
-                <label className="bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer">
-                  <Upload size={18} className="mr-2"/>Upload Points Update
-                  <input type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
+                <button onClick={handleAddNewUser} disabled={isUploading} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee Manually</button>
+                <button onClick={downloadEmployeesCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Employee Template</button>
+                <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
+                    {isUploading ? 'Uploading...' : 'Upload New Employees'}
+                    <input type="file" accept=".csv" onChange={onEmployeesFileSelect} disabled={isUploading} className="hidden" />
+                </label>
+                <button onClick={downloadPointsCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Points Template</button>
+                 <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
+                    {isUploading ? 'Uploading...' : 'Upload Points Update'}
+                    <input type="file" accept=".csv" onChange={onPointsFileSelect} disabled={isUploading} className="hidden" />
                 </label>
             </div>
             <div className="overflow-x-auto">
@@ -997,35 +1186,45 @@ const EmployeeManagement = () => {
 };
 
 const ApprovalQueue = () => {
-    const { purchases, handleApproval } = useContext(AppContext);
+    const { purchases, handleApproval, users } = useContext(AppContext);
     const pendingPurchases = purchases.filter(p => p.status === 'pending');
 
     return (
         <AdminPageContainer title="Approval Queue" icon={<CheckCircle className="mr-3"/>}>
             {pendingPurchases.length === 0 ? <p>No pending approvals.</p> : (
                 <div className="space-y-4">
-                    {pendingPurchases.map(p => (
-                        <div key={p.id} className="border rounded-lg p-4 shadow-sm bg-gray-50">
-                            <div className="flex justify-between items-start">
-                                <div><p className="font-bold text-lg">{p.username}</p><p className="text-sm text-gray-500">On: {new Date(p.date).toLocaleString()}</p></div>
-                                <div className="text-right"><p className="font-bold text-xl text-orange-500">{p.totalCost.toLocaleString()} PP</p></div>
+                    {pendingPurchases.map(p => {
+                        const user = users.find(u => u.id === p.userId);
+                        return (
+                            <div key={p.id} className="border rounded-lg p-4 shadow-sm bg-gray-50">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold text-lg">{p.username}</p>
+                                        <p className="text-sm text-gray-500">On: {new Date(p.date).toLocaleString()}</p>
+                                        <p className="text-sm text-gray-600 mt-1">Current Balance: <strong>{user?.points.toLocaleString() || 'N/A'} PP</strong></p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-xl text-orange-500">{p.totalCost.toLocaleString()} PP</p>
+                                        <p className="text-sm text-gray-600 mt-1">Balance After: <strong>{((user?.points || 0) - p.totalCost).toLocaleString() || 'N/A'} PP</strong></p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 border-t pt-4"><p className="font-semibold mb-2">Items:</p>
+                                    <ul className="space-y-2">
+                                        {p.items.map(item => (
+                                            <li key={item.id} className="flex items-center justify-between text-sm">
+                                                <div className="flex items-center"><img src={item.pictureUrl} alt={item.name} className="h-10 w-10 rounded-md object-cover mr-3"/><span>{item.name} (x{item.quantity})</span></div>
+                                                <span>{(item.purchasePrice * item.quantity).toLocaleString()} PP</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="mt-4 flex justify-end gap-3">
+                                    <button onClick={() => handleApproval(p.id, true)} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center"><CheckCircle size={18} className="mr-2"/>Approve</button>
+                                    <button onClick={() => handleApproval(p.id, false)} className="bg-red-500 text-white font-bold py-2 px-4 rounded-md hover:bg-red-600 flex items-center"><XCircle size={18} className="mr-2"/>Reject</button>
+                                </div>
                             </div>
-                            <div className="mt-4 border-t pt-4"><p className="font-semibold mb-2">Items:</p>
-                                <ul className="space-y-2">
-                                    {p.items.map(item => (
-                                        <li key={item.id} className="flex items-center justify-between text-sm">
-                                            <div className="flex items-center"><img src={item.pictureUrl} alt={item.name} className="h-10 w-10 rounded-md object-cover mr-3"/><span>{item.name} (x{item.quantity})</span></div>
-                                            <span>{(item.purchasePrice * item.quantity).toLocaleString()} PP</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="mt-4 flex justify-end gap-3">
-                                <button onClick={() => handleApproval(p.id, true)} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center"><CheckCircle size={18} className="mr-2"/>Approve</button>
-                                <button onClick={() => handleApproval(p.id, false)} className="bg-red-500 text-white font-bold py-2 px-4 rounded-md hover:bg-red-600 flex items-center"><XCircle size={18} className="mr-2"/>Reject</button>
-                            </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
         </AdminPageContainer>
@@ -1063,7 +1262,7 @@ const SettingsPage = () => {
 };
 
 const Footer = () => (
-    <footer className="bg-white mt-12 py-6">
+    <footer className="bg-gray-100 mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm">
             <p>&copy; {new Date().getFullYear()} Pinnacle Perks. A demonstration app.</p>
         </div>

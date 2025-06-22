@@ -157,7 +157,7 @@ const AppContext = createContext(null);
 const getInitialSeedData = () => {
   const initialUsers = [
     { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false },
-    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: false },
+    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: true },
     { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false },
   ];
   const initialInventory = [
@@ -498,6 +498,7 @@ function App() {
             const querySnapshot = await getDocs(purchasesCollectionRef);
             if(querySnapshot.empty) {
                 showNotification("No purchase activities to delete.", "info");
+                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -975,6 +976,7 @@ const CartPage = (props) => {
 
 const ProfilePage = () => {
     const { loggedInUser, updateUser, purchases, showNotification } = useContext(AppContext);
+    const [showChangePassword, setShowChangePassword] = useState(false);
     const fileInputRef = useRef(null);
 
     const handlePictureChange = (e) => {
@@ -1009,6 +1011,14 @@ const ProfilePage = () => {
                     <p className="text-lg">Available Balance</p>
                     <p className="text-4xl font-bold">{loggedInUser.points.toLocaleString()} PP</p>
                 </div>
+                 <button onClick={() => setShowChangePassword(prev => !prev)} className="mt-6 bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
+                    {showChangePassword ? 'Cancel' : 'Change Password'}
+                </button>
+                {showChangePassword && (
+                    <div className="w-full mt-4">
+                        <ChangePasswordForm onSuccess={() => setShowChangePassword(false)} />
+                    </div>
+                )}
             </div>
             <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
                 <h3 className="text-2xl font-bold mb-4">Last 3 Approved Purchases</h3>

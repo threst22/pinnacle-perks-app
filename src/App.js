@@ -28,7 +28,6 @@ try {
 
 } catch (error) {
     console.error("Firebase initialization failed:", error);
-    // The app will still render but Firebase-dependent features will be disabled.
 }
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'pinnacle-perks-default';
@@ -112,7 +111,6 @@ function App() {
         if (user) {
             setFirebaseUser(user);
         } else {
-             // Use custom token if available, otherwise sign in anonymously
             const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
             try {
                 if (token) {
@@ -149,28 +147,25 @@ function App() {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
         unsubscribers.push(onSnapshot(configRef, (doc) => {
             setInflation(doc.data()?.inflation || 0);
-        }, (error) => console.error("Config listener error:", error)));
+        }));
 
         // Users Listener
         const usersQuery = query(collection(db, `artifacts/${appId}/public/data/users`));
         unsubscribers.push(onSnapshot(usersQuery, (snapshot) => {
-            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setUsers(usersData);
-        }, (error) => console.error("Users listener error:", error)));
+            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }));
 
         // Inventory Listener
         const inventoryQuery = query(collection(db, `artifacts/${appId}/public/data/inventory`));
         unsubscribers.push(onSnapshot(inventoryQuery, (snapshot) => {
-            const inventoryData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setInventory(inventoryData);
-        }, (error) => console.error("Inventory listener error:", error)));
+            setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }));
 
         // Purchases Listener
         const purchasesQuery = query(collection(db, `artifacts/${appId}/public/data/purchases`));
         unsubscribers.push(onSnapshot(purchasesQuery, (snapshot) => {
-            const purchasesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setPurchases(purchasesData);
-        }, (error) => console.error("Purchases listener error:", error)));
+            setPurchases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }));
         
         setIsLoading(false);
     }).catch(error => {
@@ -191,7 +186,7 @@ function App() {
     const cartRef = doc(db, `artifacts/${appId}/users/${firebaseUser.uid}/cart`, 'current');
     const unsubscribe = onSnapshot(cartRef, (doc) => {
         setCart(doc.data()?.items || {});
-    }, (error) => console.error("Cart listener error:", error));
+    });
 
     return () => unsubscribe();
   }, [loggedInUser, firebaseUser]);
@@ -211,17 +206,14 @@ function App() {
   }, [showNotification]);
 
   // This effect syncs the local loggedInUser state with the real-time user data from Firestore.
-  // This ensures that updates (like a picture change) are reflected immediately.
   useEffect(() => {
     if (loggedInUser && users.length > 0) {
         const currentUserData = users.find(u => u.id === loggedInUser.id);
         if (currentUserData) {
-            // Use JSON.stringify for a simple but effective deep comparison to prevent unnecessary re-renders
             if (JSON.stringify(currentUserData) !== JSON.stringify(loggedInUser)) {
                 setLoggedInUser(currentUserData);
             }
         } else {
-            // User was deleted from another client, so log them out.
             handleLogout();
         }
     }
@@ -285,7 +277,7 @@ function App() {
   const handlePurchaseRequest = async (userIdForCheckout = null) => {
       const checkoutUserId = isAdmin && userIdForCheckout ? userIdForCheckout : loggedInUser.id;
       const user = users.find(u => u.id === checkoutUserId);
-      const userCart = checkoutUserId === loggedInUser.id ? cart : {}; // Simplified for now
+      const userCart = checkoutUserId === loggedInUser.id ? cart : {};
       
       if (Object.keys(userCart).length === 0) {
           showNotification('Cart is empty.', 'error');
@@ -319,15 +311,13 @@ function App() {
       setCurrentPage('store');
   };
 
-  // --- Context Provider Value ---
   const contextValue = {
     users, inventory, purchases, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
     isAdmin, pendingPurchasesCount,
-    notification, modal, // Pass state for notification and modal
+    notification, modal,
     showNotification, handleLogin, handleLogout, getPriceWithInflation, addToCart, updateCartQuantity, handlePurchaseRequest,
     showModal, closeModal,
-    // Firestore specific setters
     setInflation: async (newInflation) => {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
         await updateDoc(configRef, { inflation: newInflation });
@@ -338,7 +328,7 @@ function App() {
     },
     addUser: async (newUser) => {
         const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/users`), newUser);
-        await updateDoc(docRef, { id: docRef.id }); // Add the auto-ID back to the document
+        await updateDoc(docRef, { id: docRef.id });
     },
     deleteUser: async (userId) => {
         await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
@@ -435,13 +425,9 @@ function App() {
 }
 
 // --- Reusable Components ---
-const Modal = () => {
-    const context = useContext(AppContext);
-    // Guard against context being undefined during initial renders.
-    if (!context || !context.modal || !context.modal.isOpen) {
-        return null;
-    }
-    const { modal, closeModal } = context;
+const Modal = ({...props}) => {
+    const { modal, closeModal } = useContext(AppContext);
+    if (!modal || !modal.isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -466,18 +452,14 @@ const Modal = () => {
     );
 };
 
-const Login = () => {
-  const context = useContext(AppContext);
+const Login = ({...props}) => {
+  const { handleLogin } = useContext(AppContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if(context && context.handleLogin) {
-        context.handleLogin(username, password);
-    } else {
-        console.error("Login context is not available.");
-    }
+    handleLogin(username, password);
   };
 
   return (
@@ -523,17 +505,12 @@ const Login = () => {
   );
 };
 
-const Notification = () => {
-    const context = useContext(AppContext);
-    if (!context || !context.notification || !context.notification.show) return null;
-    const { notification } = context;
+const Notification = ({...props}) => {
+    const { notification } = useContext(AppContext);
+    if (!notification || !notification.show) return null;
 
     const baseStyle = "fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm flex items-center";
-    const typeStyles = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        info: 'bg-blue-500'
-    };
+    const typeStyles = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
 
     return (
         <div className={`${baseStyle} ${typeStyles[notification.type]}`}>
@@ -544,7 +521,7 @@ const Notification = () => {
     );
 };
 
-const Navbar = () => {
+const Navbar = ({...props}) => {
   const { loggedInUser, handleLogout, setCurrentPage, cart, isAdmin, pendingPurchasesCount } = useContext(AppContext);
   const cartItemCount = Object.values(cart).reduce((sum, q) => sum + q, 0);
 
@@ -597,7 +574,7 @@ const Navbar = () => {
   );
 };
 
-const InflationBar = () => {
+const InflationBar = ({...props}) => {
     const { inflation } = useContext(AppContext);
     if (inflation === 0) return null;
     const color = inflation > 0 ? 'bg-red-500' : 'bg-green-500';
@@ -627,7 +604,7 @@ const PriceDisplay = ({ originalPrice }) => {
 };
 
 
-const StorePage = () => {
+const StorePage = ({...props}) => {
     const { inventory, addToCart } = useContext(AppContext);
     return (
         <div>
@@ -657,7 +634,7 @@ const StorePage = () => {
     );
 };
 
-const CartPage = () => {
+const CartPage = ({...props}) => {
     const { cart, inventory, getPriceWithInflation, inflation, updateCartQuantity, handlePurchaseRequest, isAdmin, users, loggedInUser } = useContext(AppContext);
     const [checkoutForUser, setCheckoutForUser] = useState(loggedInUser.id);
 
@@ -816,6 +793,16 @@ const AdminPageContainer = ({ title, icon, children }) => (
 const InventoryManagement = () => {
     const { inventory, updateItem, addItem, deleteItem, showModal, showNotification } = useContext(AppContext);
     const [editingItem, setEditingItem] = useState(null);
+
+    // This effect ensures the editing form stays in sync with real-time data
+    useEffect(() => {
+        if (editingItem) {
+            const currentItemData = inventory.find(i => i.id === editingItem.id);
+            if (currentItemData && JSON.stringify(currentItemData) !== JSON.stringify(editingItem)) {
+                setEditingItem(currentItemData);
+            }
+        }
+    }, [inventory, editingItem]);
 
     const handleSave = () => {
         updateItem(editingItem);
@@ -1032,6 +1019,10 @@ const ApprovalQueue = () => {
 const SettingsPage = () => {
     const { inflation, setInflation: setGlobalInflation, showNotification } = useContext(AppContext);
     const [localInflation, setLocalInflation] = useState(inflation);
+
+    useEffect(() => {
+        setLocalInflation(inflation);
+    }, [inflation]);
 
     const handleSave = () => {
         setGlobalInflation(Number(localInflation));

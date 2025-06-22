@@ -495,10 +495,15 @@ function App() {
         await updateDoc(configRef, { inflation: newInflation });
     },
     updateUser: async (userToUpdate) => {
-        const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
-        await updateDoc(userRef, userToUpdate);
-        // Optimistic UI update for user edits
-        setUsers(prevUsers => prevUsers.map(u => u.id === userToUpdate.id ? userToUpdate : u));
+        try {
+            const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
+            await updateDoc(userRef, userToUpdate);
+            showNotification("User updated successfully.", "success");
+            // No optimistic update needed, listener will catch it.
+        } catch (error) {
+            console.error("Error updating user:", error);
+            showNotification(`Failed to update user: ${error.message}`, 'error');
+        }
     },
     addUser: async (newUser) => {
         const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/users`), newUser);
@@ -507,9 +512,8 @@ function App() {
     deleteUser: async (userId, displayName) => {
         try {
             await deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, userId));
-            // Optimistic UI update
-            setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
             showNotification(`User "${displayName}" deleted successfully.`, 'info');
+            // No optimistic update needed, listener will catch it.
         } catch (error) {
             console.error("Error deleting user: ", error);
             showNotification(`Failed to delete user: ${error.message}`, 'error');
@@ -1039,7 +1043,6 @@ const InventoryManagement = () => {
     const handleSave = () => {
         updateItem(editingItem);
         setEditingItem(null);
-        showNotification("Item saved successfully!", "success");
     };
 
     const handleAddNewItem = () => {

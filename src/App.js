@@ -498,7 +498,6 @@ function App() {
             const querySnapshot = await getDocs(purchasesCollectionRef);
             if(querySnapshot.empty) {
                 showNotification("No purchase activities to delete.", "info");
-                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -975,8 +974,7 @@ const CartPage = (props) => {
 };
 
 const ProfilePage = () => {
-    const { loggedInUser, updateUser, purchases, showNotification } = useContext(AppContext);
-    const [showChangePassword, setShowChangePassword] = useState(false);
+    const { loggedInUser, updateUser, purchases, showNotification, setCurrentPage } = useContext(AppContext);
     const fileInputRef = useRef(null);
 
     const handlePictureChange = (e) => {
@@ -1011,14 +1009,9 @@ const ProfilePage = () => {
                     <p className="text-lg">Available Balance</p>
                     <p className="text-4xl font-bold">{loggedInUser.points.toLocaleString()} PP</p>
                 </div>
-                 <button onClick={() => setShowChangePassword(prev => !prev)} className="mt-6 bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
-                    {showChangePassword ? 'Cancel' : 'Change Password'}
+                 <button onClick={() => setCurrentPage('change-password')} className="mt-6 bg-orange-500 text-white font-bold py-2 px-4 rounded-md hover:bg-orange-600 transition-colors">
+                    Change Password
                 </button>
-                {showChangePassword && (
-                    <div className="w-full mt-4">
-                        <ChangePasswordForm onSuccess={() => setShowChangePassword(false)} />
-                    </div>
-                )}
             </div>
             <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
                 <h3 className="text-2xl font-bold mb-4">Last 3 Approved Purchases</h3>

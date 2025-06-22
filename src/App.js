@@ -111,10 +111,11 @@ const Loader2 = ({ className, size }) => (
     <Icon className={className} size={size}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></Icon>
 );
 
-const Activity = ({ className, size }) => (
-  <Icon className={className} size={size}>
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </Icon>
+const KeyRound = ({ className, size }) => (
+    <Icon className={className} size={size}>
+        <path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z" />
+        <circle cx="16.5" cy="7.5" r=".5" />
+    </Icon>
 );
 
 
@@ -471,7 +472,6 @@ function App() {
             const employeesToDelete = users.filter(u => u.role === 'employee');
             if (employeesToDelete.length === 0) {
                 showNotification("No employees to delete.", "info");
-                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -498,7 +498,6 @@ function App() {
             const querySnapshot = await getDocs(purchasesCollectionRef);
             if(querySnapshot.empty) {
                 showNotification("No purchase activities to delete.", "info");
-                setDeletingState({ type: null, id: null });
                 return;
             }
 
@@ -878,14 +877,7 @@ const StorePage = (props) => {
 
     return (
         <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                    <Leaderboard />
-                </div>
-                <div className="lg:col-span-1">
-                    <RecentPurchases />
-                </div>
-            </div>
+            <Leaderboard />
             <h1 className="text-3xl font-bold text-gray-800 mb-6 mt-8">Welcome to the Store</h1>
             {availableInventory.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -1059,57 +1051,6 @@ const Leaderboard = () => {
                     </li>
                 ))}
             </ol>
-        </div>
-    );
-};
-
-const RecentPurchases = () => {
-    const { purchases, users } = useContext(AppContext);
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
-    const recentApproved = purchases
-        .filter(p => p.status === 'approved' && new Date(p.date) >= twoDaysAgo)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    return (
-        <div className="bg-white p-6 rounded-lg shadow-lg h-full">
-            <h3 className="text-2xl font-bold mb-4 flex items-center"><Activity className="mr-2 text-orange-500"/> Latest Activity</h3>
-            {recentApproved.length > 0 ? (
-                <ul className="space-y-4">
-                    {recentApproved.map(purchase => {
-                        const user = users.find(u => u.id === purchase.userId);
-                        const redeemer = users.find(u => u.id === purchase.redeemedBy);
-                        const mainItem = purchase.items[0];
-                        
-                        let activityText;
-                        if(purchase.redeemedBy === purchase.userId || !redeemer) {
-                            activityText = <><span className="font-semibold">{user?.employeeName || user?.username}</span> redeemed</>
-                        } else {
-                             activityText = <><span className="font-semibold">{redeemer?.employeeName || redeemer?.username}</span> redeemed for <span className="font-semibold">{user?.employeeName || user?.username}</span></>
-                        }
-
-                        return (
-                            <li key={purchase.id} className="flex items-center gap-4">
-                                <img src={user?.pictureUrl} alt={user?.username} className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm">
-                                        {activityText}
-                                        {' '}
-                                        <span className="font-semibold">{mainItem.name}</span>
-                                        {purchase.items.length > 1 && ` and ${purchase.items.length - 1} other item(s)`}.
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        {new Date(purchase.date).toLocaleString()}
-                                    </p>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-            ) : (
-                <p className="text-gray-500">No recent purchases in the store.</p>
-            )}
         </div>
     );
 };
@@ -1439,7 +1380,7 @@ const EmployeeManagement = () => {
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
                                       <>
-                                        <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password"><Save size={20}/></button>
+                                        <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password"><KeyRound size={20}/></button>
                                         <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800" disabled={deletingState.id === user.id}>
                                             {deletingState.id === user.id ? <Loader2 className="animate-spin" size={20}/> : <XCircle size={20}/>}
                                         </button>

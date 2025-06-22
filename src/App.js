@@ -822,7 +822,7 @@ const StorePage = (props) => {
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6 mt-8">Welcome to the Store</h1>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {inventory.map(item => (
+                {inventory.filter(item => item.stock > 0).map(item => (
                     <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
                         <img className="w-full h-48 object-cover" src={item.pictureUrl} alt={item.name} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/300x300/F5F5F5/4A4A4A?text=Image+Error`; }}/>
                         <div className="p-4 flex flex-col flex-grow">
@@ -1345,6 +1345,7 @@ const EmployeeManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
                                     <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
+                                    {user.role !== 'admin' && <button onClick={() => deleteUser(user.id, user.employeeName || user.username)} className="p-2 text-red-600 hover:text-red-800"><XCircle size={20}/></button>}
                                 </td>
                             </tr>
                         ))}

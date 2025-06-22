@@ -63,7 +63,7 @@ const seedDataToFirestore = async () => {
     // Seed users
     initialUsers.forEach(user => {
         const userRef = doc(collection(db, `artifacts/${appId}/public/data/users`));
-        batch.set(userRef, { ...user, id: userRef.id }); // Using auto-generated doc ID as id
+        batch.set(userRef, { ...user, id: userRef.id });
     });
 
     // Seed inventory
@@ -91,7 +91,7 @@ function App() {
   const [cart, setCart] = useState({});
 
   // UI State
-  const [loggedInUser, setLoggedInUser] = useState(null); // Local app user profile
+  const [loggedInUser, setLoggedInUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('store');
   const [notification, setNotification] = useState({ message: '', type: '', show: false });
   const [modal, setModal] = useState({ isOpen: false, title: '', content: '', onConfirm: () => {} });
@@ -144,26 +144,22 @@ function App() {
     
     checkAndSeedData().then(() => {
         // Global Config Listener
-        const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
-        unsubscribers.push(onSnapshot(configRef, (doc) => {
+        unsubscribers.push(onSnapshot(doc(db, `artifacts/${appId}/public/data/config`, "global"), (doc) => {
             setInflation(doc.data()?.inflation || 0);
         }));
 
         // Users Listener
-        const usersQuery = query(collection(db, `artifacts/${appId}/public/data/users`));
-        unsubscribers.push(onSnapshot(usersQuery, (snapshot) => {
+        unsubscribers.push(onSnapshot(query(collection(db, `artifacts/${appId}/public/data/users`)), (snapshot) => {
             setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }));
 
         // Inventory Listener
-        const inventoryQuery = query(collection(db, `artifacts/${appId}/public/data/inventory`));
-        unsubscribers.push(onSnapshot(inventoryQuery, (snapshot) => {
+        unsubscribers.push(onSnapshot(query(collection(db, `artifacts/${appId}/public/data/inventory`)), (snapshot) => {
             setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }));
 
         // Purchases Listener
-        const purchasesQuery = query(collection(db, `artifacts/${appId}/public/data/purchases`));
-        unsubscribers.push(onSnapshot(purchasesQuery, (snapshot) => {
+        unsubscribers.push(onSnapshot(query(collection(db, `artifacts/${appId}/public/data/purchases`)), (snapshot) => {
             setPurchases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }));
         
@@ -176,7 +172,7 @@ function App() {
     return () => unsubscribers.forEach(unsub => unsub());
   }, [isAuthReady]);
 
-  // Cart Listener (depends on logged-in user)
+  // Cart Listener
   useEffect(() => {
     if (!loggedInUser || !firebaseUser || !db) {
         setCart({});
@@ -191,7 +187,6 @@ function App() {
     return () => unsubscribe();
   }, [loggedInUser, firebaseUser]);
   
-  // --- UI Functions ---
   const showNotification = useCallback((message, type = 'success', duration = 3000) => {
     setNotification({ message, type, show: true });
     setTimeout(() => {
@@ -205,15 +200,13 @@ function App() {
     showNotification('You have been logged out.', 'info');
   }, [showNotification]);
 
-  // This effect syncs the local loggedInUser state with the real-time user data from Firestore.
+  // Sync logged-in user data
   useEffect(() => {
     if (loggedInUser && users.length > 0) {
         const currentUserData = users.find(u => u.id === loggedInUser.id);
-        if (currentUserData) {
-            if (JSON.stringify(currentUserData) !== JSON.stringify(loggedInUser)) {
-                setLoggedInUser(currentUserData);
-            }
-        } else {
+        if (currentUserData && JSON.stringify(currentUserData) !== JSON.stringify(loggedInUser)) {
+            setLoggedInUser(currentUserData);
+        } else if (!currentUserData) {
             handleLogout();
         }
     }
@@ -227,7 +220,6 @@ function App() {
     setModal({ isOpen: false, title: '', content: '', onConfirm: () => {} });
   };
 
-  // --- Core App Functions (with Firestore integration) ---
   const handleLogin = (username, password) => {
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
@@ -305,7 +297,7 @@ function App() {
       };
       
       await addDoc(collection(db, `artifacts/${appId}/public/data/purchases`), newPurchase);
-      await updateCartInFirestore({}); // Clear cart after request
+      await updateCartInFirestore({});
       
       showNotification('Purchase request submitted for approval!', 'success');
       setCurrentPage('store');
@@ -404,7 +396,7 @@ function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <div className="bg-gray-100 min-h-screen font-sans">
+      <div className="bg-white rounded-lg shadow-lg p-6">
         <Notification />
         <Modal />
         <Navbar />
@@ -425,7 +417,7 @@ function App() {
 }
 
 // --- Reusable Components ---
-const Modal = ({...props}) => {
+const Modal = (props) => {
     const { modal, closeModal } = useContext(AppContext);
     if (!modal || !modal.isOpen) return null;
 
@@ -452,7 +444,7 @@ const Modal = ({...props}) => {
     );
 };
 
-const Login = ({...props}) => {
+const Login = (props) => {
   const { handleLogin } = useContext(AppContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -505,7 +497,7 @@ const Login = ({...props}) => {
   );
 };
 
-const Notification = ({...props}) => {
+const Notification = (props) => {
     const { notification } = useContext(AppContext);
     if (!notification || !notification.show) return null;
 
@@ -521,7 +513,7 @@ const Notification = ({...props}) => {
     );
 };
 
-const Navbar = ({...props}) => {
+const Navbar = (props) => {
   const { loggedInUser, handleLogout, setCurrentPage, cart, isAdmin, pendingPurchasesCount } = useContext(AppContext);
   const cartItemCount = Object.values(cart).reduce((sum, q) => sum + q, 0);
 
@@ -574,7 +566,7 @@ const Navbar = ({...props}) => {
   );
 };
 
-const InflationBar = ({...props}) => {
+const InflationBar = (props) => {
     const { inflation } = useContext(AppContext);
     if (inflation === 0) return null;
     const color = inflation > 0 ? 'bg-red-500' : 'bg-green-500';
@@ -604,7 +596,7 @@ const PriceDisplay = ({ originalPrice }) => {
 };
 
 
-const StorePage = ({...props}) => {
+const StorePage = (props) => {
     const { inventory, addToCart } = useContext(AppContext);
     return (
         <div>
@@ -634,7 +626,7 @@ const StorePage = ({...props}) => {
     );
 };
 
-const CartPage = ({...props}) => {
+const CartPage = (props) => {
     const { cart, inventory, getPriceWithInflation, inflation, updateCartQuantity, handlePurchaseRequest, isAdmin, users, loggedInUser } = useContext(AppContext);
     const [checkoutForUser, setCheckoutForUser] = useState(loggedInUser.id);
 
@@ -794,7 +786,6 @@ const InventoryManagement = () => {
     const { inventory, updateItem, addItem, deleteItem, showModal, showNotification } = useContext(AppContext);
     const [editingItem, setEditingItem] = useState(null);
 
-    // This effect ensures the editing form stays in sync with real-time data
     useEffect(() => {
         if (editingItem) {
             const currentItemData = inventory.find(i => i.id === editingItem.id);

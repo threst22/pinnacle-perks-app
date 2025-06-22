@@ -1,5 +1,13 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const cors = require("cors")({
+    origin: [
+        "https://pinnacleperks.netlify.app",
+        "http://localhost:3000",
+        "http://localhost:5173"
+    ],
+    credentials: true,
+});
 const papaparse = require("papaparse");
 
 admin.initializeApp();
@@ -9,9 +17,7 @@ const db = admin.firestore();
  * A helper function to verify the Firebase Auth token.
  * Throws an error if the token is invalid.
  * SECURITY NOTE: This function only verifies that the request is from an
- * authenticated Firebase user. It does NOT check for admin privileges because
- * the app's current login architecture does not link the Firestore user role
- * to the Firebase Auth token. Removing the broken role check fixes the function crash.
+ * authenticated Firebase user. It does NOT check for admin privileges.
  * @param {string} authorizationHeader The Authorization header from the request.
  */
 const verifyToken = async (authorizationHeader) => {
@@ -20,7 +26,6 @@ const verifyToken = async (authorizationHeader) => {
   }
   const idToken = authorizationHeader.split('Bearer ')[1];
   try {
-    // This verifies that the token was issued by Firebase and is not expired.
     await admin.auth().verifyIdToken(idToken);
   } catch (error) {
     console.error("Auth Error:", error);
@@ -54,38 +59,13 @@ const parseCsv = (csvBuffer) => {
 };
 
 /**
- * A more robust CORS middleware handler.
- */
-const corsWithOptions = (req, res, callback) => {
-    const allowedOrigins = [
-        'https://pinnacleperks.netlify.app',
-        'http://localhost:3000', // for local development
-        'http://localhost:5173', // for local development with Vite
-    ];
-    const origin = req.headers.origin;
-
-    res.set('Access-Control-Allow-Credentials', 'true');
-    if (allowedOrigins.includes(origin)) {
-        res.set('Access-Control-Allow-Origin', origin);
-    }
-
-    if (req.method === 'OPTIONS') {
-        res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-        res.set('Access-Control-Max-Age', '3600');
-        res.status(204).send('');
-        return;
-    }
-    
-    callback();
-};
-
-
-/**
  * Cloud Function to handle inventory CSV uploads.
  */
-exports.uploadInventoryCsv = functions.https.onRequest(async (req, res) => {
-  corsWithOptions(req, res, async () => {
+exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).send({ message: 'Method Not Allowed' });
+      }
       try {
         await verifyToken(req.headers.authorization);
         
@@ -96,7 +76,7 @@ exports.uploadInventoryCsv = functions.https.onRequest(async (req, res) => {
         const inventoryCollection = db.collection(`artifacts/${req.query.appId}/public/data/inventory`);
 
         inventoryData.forEach((item) => {
-          if(!item.id) return; // Skip rows without an ID
+          if(!item.id) return;
           const docRef = inventoryCollection.doc(item.id);
           batch.set(docRef, {
             name: item.name || "No Name",
@@ -123,8 +103,11 @@ exports.uploadInventoryCsv = functions.https.onRequest(async (req, res) => {
 /**
  * Cloud Function to handle new employee CSV uploads.
  */
-exports.uploadEmployeesCsv = functions.https.onRequest(async (req, res) => {
-  corsWithOptions(req, res, async () => {
+exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).send({ message: 'Method Not Allowed' });
+      }
       try {
         await verifyToken(req.headers.authorization);
 
@@ -163,8 +146,11 @@ exports.uploadEmployeesCsv = functions.https.onRequest(async (req, res) => {
 /**
  * Cloud Function to handle points updates from a CSV.
  */
-exports.uploadPointsCsv = functions.https.onRequest(async (req, res) => {
-  corsWithOptions(req, res, async () => {
+exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).send({ message: 'Method Not Allowed' });
+      }
       try {
         await verifyToken(req.headers.authorization);
 

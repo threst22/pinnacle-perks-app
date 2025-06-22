@@ -140,6 +140,7 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
         const docRef = usersCollection.doc();
         batch.set(docRef, {
           username: emp.username,
+          employeeName: emp.employeeName || emp.username,
           password: emp.password || "password123",
           role: emp.role || "employee",
           points: Number(emp.points) || 0,

@@ -63,7 +63,6 @@ const parseCsv = (csvBuffer) => {
  * Cloud Function to handle inventory CSV uploads.
  */
 exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
-  // The cors handler will automatically handle the OPTIONS preflight request.
   cors(req, res, async () => {
     if (req.method !== "POST") {
       return res.status(405).send({message: "Method Not Allowed"});
@@ -173,6 +172,7 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
 
 /**
  * Cloud Function to handle points updates from a CSV.
+ * Uses 'username' to identify users.
  */
 exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -181,9 +181,9 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
     }
     try {
       let adminUsername = "Admin";
-      if (req.headers.authorization &&
-          req.headers.authorization.startsWith("Bearer ")) {
-        const idToken = req.headers.authorization.split("Bearer ")[1];
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const idToken = authHeader.split("Bearer ")[1];
         try {
           const decodedToken = await admin.auth().verifyIdToken(idToken);
           const userRecord = await admin.auth().getUser(decodedToken.uid);
@@ -204,39 +204,47 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
       }
 
       const batch = db.batch();
-      const usersCollection = db.collection(
-          `artifacts/${req.query.appId}/public/data/users`,
-      );
-      const historyCollection = db.collection(
-          `artifacts/${req.query.appId}/public/data/point_history`,
-      );
+      const basePath = `artifacts/${req.query.appId}/public/data`;
+      const usersCollection = db.collection(`${basePath}/users`);
+      const historyCollection = db.collection(`${basePath}/point_history`);
 
-      pointsData.forEach((update) => {
-        if (!update.id || update.points_to_add === undefined) {
-          return;
+      for (const update of pointsData) {
+        if (!update.username || update.points_to_add === undefined) {
+          continue;
         }
 
-        const docRef = usersCollection.doc(update.id);
         const amount = Number(update.points_to_add);
-
         if (isNaN(amount) || amount === 0) {
-          return;
+          continue;
         }
 
-        // Use set with merge to avoid failing on non-existent users.
-        batch.set(docRef, {
-          points: admin.firestore.FieldValue.increment(amount),
-        }, {merge: true});
+        const userQuery = usersCollection
+            .where("username", "==", update.username)
+            .limit(1);
+        const querySnapshot = await userQuery.get();
 
-        // Add a corresponding entry in the point history
+        if (querySnapshot.empty) {
+          functions.logger.warn(
+              `User not found for username: ${update.username}`,
+          );
+          continue;
+        }
+
+        const userDoc = querySnapshot.docs[0];
+        const docRef = userDoc.ref;
+
+        batch.update(docRef, {
+          points: admin.firestore.FieldValue.increment(amount),
+        });
+
         const historyDocRef = historyCollection.doc();
         batch.set(historyDocRef, {
-          userId: update.id,
+          userId: userDoc.id,
           pointsAdded: amount,
           date: new Date().toISOString(),
           reason: `CSV upload by ${adminUsername}`,
         });
-      });
+      }
 
       await batch.commit();
       return res.status(200).send({

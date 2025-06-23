@@ -220,6 +220,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [pointHistory, setPointHistory] = useState([]);
   const [inflation, setInflation] = useState({});
   const [cart, setCart] = useState({});
 
@@ -294,6 +295,11 @@ function App() {
         // Purchases Listener
         unsubscribers.push(onSnapshot(query(collection(db, `artifacts/${appId}/public/data/purchases`)), (snapshot) => {
             setPurchases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }));
+
+        // Point History Listener
+        unsubscribers.push(onSnapshot(query(collection(db, `artifacts/${appId}/public/data/point_history`)), (snapshot) => {
+            setPointHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }));
         
         setIsLoading(false);
@@ -562,7 +568,7 @@ function App() {
     };
 
   const contextValue = {
-    users, inventory, purchases, inflation, cart, firebaseUser,
+    users, inventory, purchases, pointHistory, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
     isAdmin, pendingPurchasesCount, isUploading, deletingState,
     showNotification, handleLogin, handleLogout, calculateItemPrice, addToCart, updateCartQuantity, handlePurchaseRequest,
@@ -571,11 +577,24 @@ function App() {
         const configRef = doc(db, `artifacts/${appId}/public/data/config`, "global");
         await updateDoc(configRef, { inflation: newInflation });
     },
-    updateUser: async (userToUpdate) => {
+    updateUser: async (userToUpdate, originalUser) => {
         try {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
             await updateDoc(userRef, userToUpdate);
-            // No notification here to avoid spamming on every checkbox click
+
+            // Log points change if it happened and an original user was passed
+            if (originalUser && userToUpdate.points !== originalUser.points) {
+                const pointsChange = userToUpdate.points - originalUser.points;
+                if(pointsChange !== 0) {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/point_history`), {
+                        userId: userToUpdate.id,
+                        pointsAdded: pointsChange,
+                        date: new Date().toISOString(),
+                        reason: `Admin correction by ${loggedInUser.username}`
+                    });
+                }
+            }
+            showNotification("User updated successfully.", "success");
         } catch (error) {
             console.error("Error updating user:", error);
             showNotification(`Failed to update user: ${error.message}`, 'error');
@@ -1108,7 +1127,7 @@ const CartPage = (props) => {
 };
 
 const ProfilePage = () => {
-    const { loggedInUser, updateUser, purchases, showNotification, setCurrentPage } = useContext(AppContext);
+    const { loggedInUser, updateUser, purchases, pointHistory, showNotification, setCurrentPage } = useContext(AppContext);
     const fileInputRef = useRef(null);
 
     const handlePictureChange = (e) => {
@@ -1116,7 +1135,7 @@ const ProfilePage = () => {
         if (file && file.type.startsWith("image/")) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                updateUser({ ...loggedInUser, pictureUrl: reader.result });
+                updateUser({ ...loggedInUser, pictureUrl: reader.result }, loggedInUser);
                 showNotification('Profile picture updated!', 'success');
             };
             reader.readAsDataURL(file);
@@ -1125,7 +1144,18 @@ const ProfilePage = () => {
         }
     };
 
-    const approvedPurchases = purchases.filter(p => p.userId === loggedInUser.id && p.status === 'approved').sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+    const combinedHistory = useMemo(() => {
+        const purchaseHistory = purchases
+            .filter(p => p.userId === loggedInUser.id && p.status === 'approved')
+            .map(p => ({ type: 'purchase', date: new Date(p.date), data: p }));
+
+        const pointsHistoryFormatted = pointHistory
+            .filter(h => h.userId === loggedInUser.id)
+            .map(h => ({ type: 'points', date: new Date(h.date), data: h }));
+            
+        return [...purchaseHistory, ...pointsHistoryFormatted].sort((a, b) => b.date - a.date);
+    }, [purchases, pointHistory, loggedInUser.id]);
+
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1154,22 +1184,40 @@ const ProfilePage = () => {
                 </button>
             </div>
             <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
-                <h3 className="text-2xl font-bold mb-4">Last 3 Approved Purchases</h3>
-                {approvedPurchases.length > 0 ? (
-                    <div className="space-y-4">
-                        {approvedPurchases.map(purchase => (
-                            <div key={purchase.id} className="border p-4 rounded-lg">
-                                <div className="flex justify-between items-center mb-2">
-                                    <p className="font-semibold text-gray-700">Order from {new Date(purchase.date).toLocaleDateString()}</p>
-                                    <p className="font-bold text-lg text-orange-500">-{purchase.totalCost.toLocaleString()} PP</p>
-                                </div>
-                                <ul className="list-disc list-inside text-sm text-gray-600">
-                                    {purchase.items.map(item => <li key={item.id}>{item.name} (x{item.quantity}) @ {item.purchasePrice.toLocaleString()} PP each</li>)}
-                                </ul>
+                <h3 className="text-2xl font-bold mb-4">Activity History</h3>
+                {combinedHistory.length > 0 ? (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                        {combinedHistory.map((entry, index) => (
+                            <div key={`${entry.type}-${entry.data.id}-${index}`} className="border p-4 rounded-lg bg-gray-50">
+                                {entry.type === 'purchase' ? (
+                                    <>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <p className="font-semibold text-gray-700">Order from {new Date(entry.data.date).toLocaleDateString()}</p>
+                                            <p className="font-bold text-lg text-orange-500">-{entry.data.totalCost.toLocaleString()} PP</p>
+                                        </div>
+                                        <ul className="list-disc list-inside text-sm text-gray-600">
+                                            {entry.data.items.map(item => <li key={item.id}>{item.name} (x{item.quantity}) @ {item.purchasePrice.toLocaleString()} PP each</li>)}
+                                        </ul>
+                                    </>
+                                ) : (
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-gray-700">
+                                                {entry.data.pointsAdded > 0 ? 'Points Added' : 'Points Deducted'}
+                                            </p>
+                                            <p className="text-sm text-gray-500">
+                                                On {entry.date.toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <p className={`font-bold text-lg ${entry.data.pointsAdded > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            {entry.data.pointsAdded > 0 ? '+' : ''}{entry.data.pointsAdded.toLocaleString()} PP
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
-                ) : <p className="text-gray-500">No approved purchases yet.</p>}
+                ) : <p className="text-gray-500">No activity yet.</p>}
             </div>
         </div>
     );
@@ -1321,6 +1369,7 @@ const InventoryManagement = () => {
 
 const EmployeeManagement = () => {
     const { users, updateUser, addUser, deleteUser, showModal, showNotification, handleCSVUpload, isUploading, deletingState, resetPassword } = useContext(AppContext);
+    const [editingUser, setEditingUser] = useState(null);
     const [pointsToAdd, setPointsToAdd] = useState({});
     const [selectedUsers, setSelectedUsers] = useState(new Set());
     const [sortConfig, setSortConfig] = useState({ key: 'employeeName', direction: 'ascending' });
@@ -1338,7 +1387,7 @@ const EmployeeManagement = () => {
             ...user,
             departments: newDepartments.length > 0 ? newDepartments : ['Unassigned']
         };
-        updateUser(updatedUser);
+        updateUser(updatedUser, user);
     };
 
     const sortedUsers = useMemo(() => {
@@ -1376,14 +1425,6 @@ const EmployeeManagement = () => {
             direction = 'descending';
         }
         setSortConfig({ key, direction });
-    };
-
-    const handleAddPoints = (user) => {
-        const amount = Number(pointsToAdd[user.id] || 0);
-        if (amount === 0) return;
-        updateUser({ ...user, points: user.points + amount });
-        setPointsToAdd(prev => ({...prev, [user.id]: ''}));
-        showNotification(`${amount.toLocaleString()} points added to ${user.employeeName || user.username}`, 'success');
     };
     
     const handleAddNewUser = () => {
@@ -1436,6 +1477,40 @@ const EmployeeManagement = () => {
         );
     };
 
+    const downloadEmployeesCSVTemplate = () => {
+        const csvContent = "data:text/csv;charset=utf-8," + "username,employeeName,password,role,points,globalDiscount,departments,pictureUrl\n";
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "employees_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    
+    const downloadPointsCSVTemplate = () => {
+        const csvContent = "data:text/csv;charset=utf-8," + "id,points_to_add\n";
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "points_update_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const onEmployeesFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) handleCSVUpload(file, EMPLOYEES_UPLOAD_URL);
+        e.target.value = null;
+    };
+    
+    const onPointsFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) handleCSVUpload(file, POINTS_UPLOAD_URL);
+        e.target.value = null;
+    };
+    
     const handleResetPassword = (user) => {
         showModal(
             'Reset Password',
@@ -1447,14 +1522,27 @@ const EmployeeManagement = () => {
 
     return (
         <AdminPageContainer title="Employee Management" icon={<Users className="mr-3"/>}>
-            <div className="mb-4 flex items-center gap-4 flex-wrap">
-                <button onClick={handleAddNewUser} disabled={isUploading} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee Manually</button>
+             <div className="mb-4 flex items-center gap-4 flex-wrap">
+                <button onClick={handleAddNewUser} disabled={isUploading} className="bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee</button>
+                <button onClick={downloadEmployeesCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Employees</button>
+                <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
+                    {isUploading ? 'Uploading...' : 'Upload Employees'}
+                    <input type="file" accept=".csv" onChange={onEmployeesFileSelect} disabled={isUploading} className="hidden" />
+                </label>
+                 <button onClick={downloadPointsCSVTemplate} disabled={isUploading} className="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Points Template</button>
+                <label className={`bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                    {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
+                    {isUploading ? 'Uploading...' : 'Upload Points'}
+                    <input type="file" accept=".csv" onChange={onPointsFileSelect} disabled={isUploading} className="hidden" />
+                </label>
                 {selectedUsers.size > 0 && (
                      <button onClick={handleDeleteSelected} disabled={isUploading} className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 flex items-center disabled:bg-gray-400">
                         <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
                     </button>
                 )}
             </div>
+            {editingUser && <EditUserModal user={editingUser} onClose={() => setEditingUser(null)} onSave={(updated) => { updateUser(updated, editingUser); setEditingUser(null); }}/>}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-100">
@@ -1463,8 +1551,6 @@ const EmployeeManagement = () => {
                             <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('employeeName')}>User</th>
                             <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('departments')}>Department(s)</th>
                             <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('points')}>Points</th>
-                            <th className="px-6 py-3">Global Discount</th>
-                            <th className="px-6 py-3">Add/Deduct Points</th>
                             <th className="px-6 py-3">Actions</th>
                         </tr>
                     </thead>
@@ -1504,16 +1590,8 @@ const EmployeeManagement = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 font-semibold">{user.points.toLocaleString()}</td>
-                                <td className="px-6 py-4 font-semibold text-green-600">{user.globalDiscount || 0}%</td>
-                                <td className="px-6 py-4">
-                                    {user.role === 'employee' && (
-                                      <div className="flex items-center">
-                                          <input type="number" placeholder="e.g., 500" className="p-1 border rounded-l-md w-32" value={pointsToAdd[user.id] || ''} onChange={e => setPointsToAdd(prev => ({...prev, [user.id]: e.target.value}))}/>
-                                          <button onClick={() => handleAddPoints(user)} className="bg-orange-500 text-white p-2 rounded-r-md hover:bg-orange-600"><PlusCircle size={16}/></button>
-                                      </div>
-                                    )}
-                                </td>
                                 <td className="px-6 py-4 flex items-center gap-2">
+                                    <button onClick={() => setEditingUser(user)} className="p-2 text-blue-600 hover:text-blue-800"><Edit size={20}/></button>
                                     {user.role !== 'admin' && (
                                       <>
                                         <button onClick={() => handleResetPassword(user)} className="p-2 text-orange-600 hover:text-orange-800" title="Reset Password" disabled={deletingState.type === 'reset-password' && deletingState.id === user.id}>
@@ -1533,6 +1611,49 @@ const EmployeeManagement = () => {
         </AdminPageContainer>
     );
 };
+
+const EditUserModal = ({ user, onClose, onSave }) => {
+    const [userData, setUserData] = useState(user);
+
+    const handleChange = (e) => {
+        const { name, value, type } = e.target;
+        setUserData(prev => ({ ...prev, [name]: type === 'number' ? Number(value) : value }));
+    };
+
+    const handleSave = () => {
+        onSave(userData);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
+                <h2 className="text-xl font-bold mb-4">Edit User: {user.employeeName}</h2>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Employee Name</label>
+                        <input type="text" name="employeeName" value={userData.employeeName} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Username</label>
+                        <input type="text" name="username" value={userData.username} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Points</label>
+                        <input type="number" name="points" value={userData.points} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Global Discount (%)</label>
+                        <input type="number" name="globalDiscount" value={userData.globalDiscount} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm" />
+                    </div>
+                </div>
+                <div className="flex justify-end gap-4 mt-6">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    )
+}
 
 const ApprovalQueue = () => {
     const { purchases, handleApproval, users } = useContext(AppContext);
@@ -1676,7 +1797,7 @@ const ChangePasswordPage = ({isForced = false}) => {
             ...loggedInUser,
             password,
             forcePasswordChange: false,
-        });
+        }, loggedInUser);
         showNotification("Password changed successfully!", "success");
         if(!isForced) {
             setCurrentPage('profile');

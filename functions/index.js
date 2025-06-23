@@ -91,6 +91,7 @@ exports.uploadInventoryCsv = functions.https.onRequest((req, res) => {
           description: item.description || "",
           price: Number(item.price) || 0,
           stock: Number(item.stock) || 0,
+          discount: Number(item.discount) || 0,
           pictureUrl: item.pictureUrl ||
             "https://placehold.co/300x300/F5F5F5/4A4A4A?text=New",
           id: item.id,
@@ -138,12 +139,16 @@ exports.uploadEmployeesCsv = functions.https.onRequest((req, res) => {
           return;
         }
         const docRef = usersCollection.doc();
+        const departments = (emp.departments || "Unassigned")
+            .split(",").map((d) => d.trim());
         batch.set(docRef, {
           username: emp.username,
           employeeName: emp.employeeName || emp.username,
           password: emp.password || "password123",
           role: emp.role || "employee",
           points: Number(emp.points) || 0,
+          globalDiscount: Number(emp.globalDiscount) || 0,
+          departments: departments,
           pictureUrl: emp.pictureUrl ||
             "https://placehold.co/100x100/4A4A4A?text=N",
           id: docRef.id,
@@ -175,6 +180,22 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
       return res.status(405).send({message: "Method Not Allowed"});
     }
     try {
+      let adminUsername = "Admin";
+      if (req.headers.authorization &&
+          req.headers.authorization.startsWith("Bearer ")) {
+        const idToken = req.headers.authorization.split("Bearer ")[1];
+        try {
+          const decodedToken = await admin.auth().verifyIdToken(idToken);
+          const userRecord = await admin.auth().getUser(decodedToken.uid);
+          adminUsername = userRecord.displayName || userRecord.email || "Admin";
+        } catch (e) {
+          functions.logger.warn(
+              "Could not determine admin user for logging:",
+              e.message,
+          );
+        }
+      }
+
       await verifyToken(req.headers.authorization);
 
       const pointsData = await parseCsv(req.rawBody);
@@ -186,23 +207,36 @@ exports.uploadPointsCsv = functions.https.onRequest((req, res) => {
       const usersCollection = db.collection(
           `artifacts/${req.query.appId}/public/data/users`,
       );
+      const historyCollection = db.collection(
+          `artifacts/${req.query.appId}/public/data/point_history`,
+      );
 
-      for (const update of pointsData) {
-        if (!update.id || !update.points_to_add) {
-          continue;
+      pointsData.forEach((update) => {
+        if (!update.id || update.points_to_add === undefined) {
+          return;
         }
 
         const docRef = usersCollection.doc(update.id);
         const amount = Number(update.points_to_add);
 
-        if (isNaN(amount)) {
-          continue;
+        if (isNaN(amount) || amount === 0) {
+          return;
         }
 
-        batch.update(docRef, {
+        // Use set with merge to avoid failing on non-existent users.
+        batch.set(docRef, {
           points: admin.firestore.FieldValue.increment(amount),
+        }, {merge: true});
+
+        // Add a corresponding entry in the point history
+        const historyDocRef = historyCollection.doc();
+        batch.set(historyDocRef, {
+          userId: update.id,
+          pointsAdded: amount,
+          date: new Date().toISOString(),
+          reason: `CSV upload by ${adminUsername}`,
         });
-      }
+      });
 
       await batch.commit();
       return res.status(200).send({

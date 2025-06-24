@@ -229,6 +229,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('store');
   const [notification, setNotification] = useState({ message: '', type: '', show: false });
   const [modal, setModal] = useState({ isOpen: false, title: '', content: '', onConfirm: () => {} });
+  const notificationTimeout = useRef(null);
 
   // --- Derived State ---
   const isAdmin = loggedInUser?.role === 'admin';
@@ -327,8 +328,11 @@ function App() {
   }, [loggedInUser, firebaseUser]);
   
   const showNotification = useCallback((message, type = 'success', duration = 3000) => {
+    if (notificationTimeout.current) {
+        clearTimeout(notificationTimeout.current);
+    }
     setNotification({ message, type, show: true });
-    setTimeout(() => {
+    notificationTimeout.current = setTimeout(() => {
       setNotification({ message: '', type: '', show: false });
     }, duration);
   }, []);
@@ -571,6 +575,7 @@ function App() {
     users, inventory, purchases, pointHistory, inflation, cart, firebaseUser,
     loggedInUser, currentPage, setCurrentPage,
     isAdmin, pendingPurchasesCount, isUploading, deletingState,
+    notification,
     showNotification, handleLogin, handleLogout, calculateItemPrice, addToCart, updateCartQuantity, handlePurchaseRequest,
     handleCSVUpload, showModal, closeModal,
     setInflation: async (newInflation) => {
@@ -874,16 +879,21 @@ const Login = (props) => {
 
 const Notification = (props) => {
     const { notification } = useContext(AppContext);
-    if (!notification || !notification.show) return null;
 
-    const baseStyle = "fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm flex items-center transition-all duration-300 transform-gpu animate-fade-in-right";
-    const typeStyles = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+    if (!notification) return null;
+
+    const typeStyles = { 
+        success: 'bg-green-500', 
+        error: 'bg-red-500', 
+        info: 'bg-blue-500' 
+    };
 
     return (
-        <div className={`${baseStyle} ${typeStyles[notification.type]}`}>
-            {notification.type === 'success' && <CheckCircle className="mr-3" />}
-            {notification.type === 'error' && <XCircle className="mr-3" />}
-            {notification.message}
+        <div className={`fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm flex items-center transition-opacity duration-300 ${notification.show ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${typeStyles[notification.type] || 'bg-gray-500'}`}>
+             {notification.type === 'success' && <CheckCircle className="mr-3" />}
+             {notification.type === 'error' && <XCircle className="mr-3" />}
+             {notification.type === 'info' && <Icon size={20} className="mr-3"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></Icon>}
+             {notification.message}
         </div>
     );
 };
@@ -1489,7 +1499,7 @@ const EmployeeManagement = () => {
     };
     
     const downloadPointsCSVTemplate = () => {
-        const csvContent = "data:text/csv;charset=utf-8," + "id,points_to_add\n";
+        const csvContent = "data:text/csv;charset=utf-8," + "username,points_to_add\n";
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);

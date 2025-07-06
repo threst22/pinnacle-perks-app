@@ -271,6 +271,7 @@ const CustomCursor = () => {
   );
 };
 
+
 // --- Main App Component ---
 function App() {
   // --- State Management ---
@@ -394,18 +395,18 @@ function App() {
 
   // Cart Listener
   useEffect(() => {
-    if (!loggedInUser || !firebaseUser || !db) {
+    if (!loggedInUser || !db) {
         setCart({});
         return;
     };
 
-    const cartRef = doc(db, `artifacts/${appId}/users/${firebaseUser.uid}/cart`, 'current');
+    const cartRef = doc(db, `artifacts/${appId}/public/data/carts`, loggedInUser.id);
     const unsubscribe = onSnapshot(cartRef, (doc) => {
         setCart(doc.data() || { items: {}, appliedCoupon: null });
     });
 
     return () => unsubscribe();
-  }, [loggedInUser, firebaseUser]);
+  }, [loggedInUser]);
   
   const showNotification = useCallback((message, type = 'success', duration = 3000) => {
     if (notificationTimeout.current) {
@@ -474,9 +475,9 @@ function App() {
   }, [inflation]);
   
   const updateCartInFirestore = async (newCart) => {
-    if (!loggedInUser || !firebaseUser || !db) return;
-    const cartRef = doc(db, `artifacts/${appId}/users/${firebaseUser.uid}/cart`, 'current');
-    await setDoc(cartRef, newCart);
+    if (!loggedInUser || !db) return;
+    const cartRef = doc(db, `artifacts/${appId}/public/data/carts`, loggedInUser.id);
+    await setDoc(cartRef, newCart, { merge: true });
   };
   
   const addToCart = (itemId, quantity = 1) => {
@@ -680,6 +681,7 @@ function App() {
     showNotification, handleLogin, handleLogout, calculateItemPrice, addToCart, updateCartQuantity, handlePurchaseRequest,
     handleCSVUpload, showModal, closeModal,
     updateConfig,
+    updateCartInFirestore,
     updateUser: async (userToUpdate, originalUser) => {
         try {
             const userRef = doc(db, `artifacts/${appId}/public/data/users`, userToUpdate.id);
@@ -1451,10 +1453,16 @@ const CartPage = (props) => {
                             {availableCoupons.length > 0 && (
                                 <div>
                                     <h3 className="font-semibold text-[#07124a]">Your Available Coupons:</h3>
-                                    <div className="flex flex-wrap gap-2 mt-2">
+                                    <div className="flex flex-wrap gap-4 mt-2">
                                         {availableCoupons.map(coupon => (
-                                            <button key={coupon.name} onClick={() => handleApplyCoupon(coupon.name)} className="bg-blue-100 text-blue-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">
-                                                {coupon.name} ({coupon.discount}%)
+                                            <button
+                                                key={coupon.name}
+                                                onClick={() => handleApplyCoupon(coupon.name)}
+                                                className="bg-blue-100/80 text-[#07124a] p-4 rounded-lg shadow-lg glow transform hover:scale-105 transition-transform duration-300 flex flex-col items-center justify-center"
+                                            >
+                                                <div className="font-bold text-lg">{coupon.label || coupon.name}</div>
+                                                <div className="text-3xl font-bold text-[#104AD4] my-1">{coupon.discount}%</div>
+                                                <div className="text-xs text-gray-500">OFF</div>
                                             </button>
                                         ))}
                                     </div>
@@ -2017,7 +2025,7 @@ const EditUserModal = ({ user, onClose, onSave }) => {
 }
 
 const ApprovalQueue = ({ purchases, handleApproval, users }) => {
-    const pendingPurchases = purchases.filter(p => p.status === 'pending');
+    const pendingPurchases = (purchases || []).filter(p => p.status === 'pending');
 
     return (
         <AdminPageContainer title="Approval Queue" icon={<CheckCircle className="mr-3"/>}>

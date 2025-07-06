@@ -219,6 +219,58 @@ const seedDataToFirestore = async () => {
     }
 };
 
+const CustomCursor = () => {
+  const cursorDotRef = useRef(null);
+  const cursorCircleRef = useRef(null);
+  const previousMousePosition = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const moveCursor = (e) => {
+      const { clientX, clientY } = e;
+      if (cursorDotRef.current && cursorCircleRef.current) {
+        cursorDotRef.current.style.left = `${clientX}px`;
+        cursorDotRef.current.style.top = `${clientY}px`;
+
+        const deltaX = clientX - previousMousePosition.current.x;
+        const deltaY = clientY - previousMousePosition.current.y;
+
+        cursorCircleRef.current.style.transform = `translate(${clientX - deltaX * 0.2 - 20}px, ${clientY - deltaY * 0.2 - 20}px)`;
+
+        previousMousePosition.current = { x: clientX, y: clientY };
+      }
+    };
+
+    const handleMouseOver = (e) => {
+      if (e.target.closest('a, button')) {
+        cursorCircleRef.current.classList.add('hovered');
+        cursorDotRef.current.classList.add('hovered');
+      }
+    };
+
+    const handleMouseOut = (e) => {
+      cursorCircleRef.current.classList.remove('hovered');
+      cursorDotRef.current.classList.remove('hovered');
+    };
+
+    window.addEventListener('mousemove', moveCursor);
+    document.body.addEventListener('mouseover', handleMouseOver);
+    document.body.addEventListener('mouseout', handleMouseOut);
+
+    return () => {
+      window.removeEventListener('mousemove', moveCursor);
+      document.body.removeEventListener('mouseover', handleMouseOver);
+      document.body.removeEventListener('mouseout', handleMouseOut);
+    };
+  }, []);
+
+  return (
+    <>
+      <div ref={cursorDotRef} className="cursor-dot"></div>
+      <div ref={cursorCircleRef} className="cursor-circle"></div>
+    </>
+  );
+};
+
 // --- Main App Component ---
 function App() {
   // --- State Management ---
@@ -820,7 +872,7 @@ function App() {
                     left: 0;
                     width: 8px;
                     height: 8px;
-                    background-color: #000;
+                    background-color: rgba(0, 0, 0, 0.8);
                     border-radius: 50%;
                     transform: translate(-50%, -50%);
                     pointer-events: none;
@@ -1133,7 +1185,7 @@ const InflationBar = () => {
     const inflation = config.inflation || {};
     if (!loggedInUser || !inflation || loggedInUser.role === 'admin') return null;
     
-    const userDepartments = loggedInUser?.departments?.length ? user.departments : ['Unassigned'];
+    const userDepartments = loggedInUser?.departments?.length ? loggedInUser.departments : ['Unassigned'];
     const inflationRates = userDepartments.map(dept => {
       const key = dept.toLowerCase().replace(/ /g, '');
       return inflation[key] ?? inflation.unassigned ?? 0;
@@ -1964,8 +2016,7 @@ const EditUserModal = ({ user, onClose, onSave }) => {
     )
 }
 
-const ApprovalQueue = () => {
-    const { purchases, handleApproval, users } = useContext(AppContext);
+const ApprovalQueue = ({ purchases, handleApproval, users }) => {
     const pendingPurchases = purchases.filter(p => p.status === 'pending');
 
     return (
@@ -2267,58 +2318,6 @@ const ChangePasswordPage = ({isForced = false}) => {
             </div>
         </div>
     );
-};
-
-const CustomCursor = () => {
-  const cursorDotRef = useRef(null);
-  const cursorCircleRef = useRef(null);
-  const previousMousePosition = useRef({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const moveCursor = (e) => {
-      const { clientX, clientY } = e;
-      if (cursorDotRef.current && cursorCircleRef.current) {
-        cursorDotRef.current.style.left = `${clientX}px`;
-        cursorDotRef.current.style.top = `${clientY}px`;
-
-        const deltaX = clientX - previousMousePosition.current.x;
-        const deltaY = clientY - previousMousePosition.current.y;
-
-        cursorCircleRef.current.style.transform = `translate(${clientX - deltaX * 0.2 - 20}px, ${clientY - deltaY * 0.2 - 20}px)`;
-
-        previousMousePosition.current = { x: clientX, y: clientY };
-      }
-    };
-
-    const handleMouseOver = (e) => {
-      if (e.target.closest('a, button')) {
-        cursorCircleRef.current.classList.add('hovered');
-        cursorDotRef.current.classList.add('hovered');
-      }
-    };
-
-    const handleMouseOut = (e) => {
-      cursorCircleRef.current.classList.remove('hovered');
-      cursorDotRef.current.classList.remove('hovered');
-    };
-
-    window.addEventListener('mousemove', moveCursor);
-    document.body.addEventListener('mouseover', handleMouseOver);
-    document.body.addEventListener('mouseout', handleMouseOut);
-
-    return () => {
-      window.removeEventListener('mousemove', moveCursor);
-      document.body.removeEventListener('mouseover', handleMouseOver);
-      document.body.removeEventListener('mouseout', handleMouseOut);
-    };
-  }, []);
-
-  return (
-    <>
-      <div ref={cursorDotRef} className="cursor-dot"></div>
-      <div ref={cursorCircleRef} className="cursor-circle"></div>
-    </>
-  );
 };
 
 

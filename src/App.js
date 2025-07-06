@@ -1299,10 +1299,10 @@ const StorePage = (props) => {
                 <div className="flex justify-between items-center mb-6">
                      <h1 className="text-3xl font-bold text-[#07124a]">Welcome to the Store</h1>
                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-600">Sort by:</span>
-                        <SortButton value="name" label="Name" />
-                        <SortButton value="price" label="Price" />
-                        <SortButton value="stock" label="Stock" />
+                         <span className="text-sm font-medium text-gray-600">Sort by:</span>
+                         <SortButton value="name" label="Name" />
+                         <SortButton value="price" label="Price" />
+                         <SortButton value="stock" label="Stock" />
                      </div>
                 </div>
                 {sortedInventory.length > 0 ? (
@@ -1907,7 +1907,7 @@ const EmployeeManagement = () => {
                 </label>
                 {selectedUsers.size > 0 && (
                      <button onClick={handleDeleteSelected} disabled={isUploading} className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 flex items-center disabled:bg-gray-400">
-                        <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
+                         <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
                     </button>
                 )}
             </div>
@@ -2024,7 +2024,8 @@ const EditUserModal = ({ user, onClose, onSave }) => {
     )
 }
 
-const ApprovalQueue = ({ purchases, handleApproval, users }) => {
+const ApprovalQueue = () => {
+    const { purchases, handleApproval, users } = useContext(AppContext);
     const pendingPurchases = (purchases || []).filter(p => p.status === 'pending');
 
     return (

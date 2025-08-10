@@ -2364,7 +2364,7 @@ const ChangePasswordPage = ({isForced = false}) => {
 };
 
 const RafflePage = () => {
-    const { loggedInUser, updateUser, users, showNotification } = useContext(AppContext);
+    const { loggedInUser, updateUser, users, showNotification, isAdmin } = useContext(AppContext);
     const [ticketAmount, setTicketAmount] = useState(1);
 
     const handlePurchaseTickets = () => {
@@ -2388,10 +2388,32 @@ const RafflePage = () => {
         setTicketAmount(1);
     };
 
-    const raffleLeaderboard = [...users]
-        .filter(u => u.role === 'employee' && u.raffleTickets > 0)
-        .sort((a, b) => b.raffleTickets - a.raffleTickets)
-        .slice(0, 10);
+    const rafflePurchasers = [...users]
+        .filter(u => u.raffleTickets && u.raffleTickets > 0)
+        .sort((a, b) => b.raffleTickets - a.raffleTickets);
+
+    const downloadRafflePurchasers = () => {
+        const headers = ["Employee Name", "Username", "Tickets Purchased"];
+        const csvRows = [
+            headers.join(','),
+            ...rafflePurchasers.map(user => 
+                [
+                    `"${user.employeeName || user.username}"`,
+                    `"${user.username}"`,
+                    user.raffleTickets
+                ].join(',')
+            )
+        ];
+        
+        const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "raffle_purchasers.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2429,9 +2451,20 @@ const RafflePage = () => {
             </div>
 
             <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
-                <h3 className="text-2xl font-bold mb-4 flex items-center text-[#5D4037]">Raffle Leaderboard</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-2xl font-bold flex items-center text-[#5D4037]">Raffle Participants</h3>
+                    {isAdmin && (
+                        <button 
+                            onClick={downloadRafflePurchasers}
+                            className="bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center text-sm"
+                        >
+                            <Download size={16} className="mr-2"/>
+                            Download List
+                        </button>
+                    )}
+                </div>
                 <ol className="space-y-3">
-                    {raffleLeaderboard.map((user, index) => (
+                    {rafflePurchasers.length > 0 ? rafflePurchasers.map((user, index) => (
                         <li key={user.id} className="flex items-center justify-between p-2 rounded-md transition-colors hover:bg-gray-50">
                             <div className="flex items-center">
                                 <span className="font-bold text-lg w-8 text-gray-500">{index + 1}.</span>
@@ -2440,7 +2473,9 @@ const RafflePage = () => {
                             </div>
                             <span className="font-bold text-[#F9A826]">{user.raffleTickets.toLocaleString()}</span>
                         </li>
-                    ))}
+                    )) : (
+                        <p className="text-gray-500 text-center py-4">No one has purchased raffle tickets yet.</p>
+                    )}
                 </ol>
             </div>
         </div>

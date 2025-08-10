@@ -4,7 +4,7 @@ import React, { useState, useEffect, createContext, useContext, useRef, useCallb
 // These are assumed to be available in the environment
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, runTransaction, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, writeBatch, runTransaction, getDocs, deleteField } from 'firebase/firestore';
 
 // --- SVG Icons (Replacement for lucide-react) ---
 const Icon = ({ children, className = '', size = 24 }) => (
@@ -163,9 +163,9 @@ const AppContext = createContext(null);
 // --- Initial Data Seeding Logic ---
 const getInitialSeedData = () => {
   const initialUsers = [
-    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false, globalDiscount: 0, departments: ['Unassigned'] },
-    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: true, globalDiscount: 0, departments: ['Accounting'] },
-    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false, globalDiscount: 5, departments: ['Service and Sales', 'Parts'] },
+    { id: 'admin-01', username: 'admin', employeeName: 'Admin User', password: '1nTu1tu53r', role: 'admin', points: 1000000, pictureUrl: `https://placehold.co/100x100/E9A47C/FFFFFF?text=A`, forcePasswordChange: false, globalDiscount: 0, departments: ['Unassigned'], raffleTickets: 0 },
+    { id: 'emp-01', username: 'alice', employeeName: 'Alice', password: 'password123', role: 'employee', points: 5000, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=A`, forcePasswordChange: true, globalDiscount: 0, departments: ['Accounting'], raffleTickets: 0 },
+    { id: 'emp-02', username: 'bob', employeeName: 'Bob', password: 'password123', role: 'employee', points: 7500, pictureUrl: `https://placehold.co/100x100/4A90E2/FFFFFF?text=B`, forcePasswordChange: false, globalDiscount: 5, departments: ['Service and Sales', 'Parts'], raffleTickets: 0 },
   ];
   const initialInventory = [
     { id: 'item-01', name: 'Company Hoodie', description: 'Comfortable and stylish company branded hoodie.', price: 2500, stock: 50, pictureUrl: `https://placehold.co/300x300/F5F5F5/4A4A4A?text=Hoodie`, discount: 0 },
@@ -492,20 +492,42 @@ function App() {
       showNotification(`${item.name} added to cart.`, 'success');
   };
   
-  const updateCartQuantity = (itemId, newQuantity) => {
-     const item = inventory.find(i => i.id === itemId);
-     if(newQuantity > item.stock) {
-         showNotification(`Only ${item.stock} available in stock.`, 'error');
-         newQuantity = item.stock;
-     }
-     const newCartItems = { ...cart.items };
-     if (newQuantity <= 0) {
-         delete newCartItems[itemId];
-     } else {
-         newCartItems[itemId] = newQuantity;
-     }
-     updateCartInFirestore({ ...cart, items: newCartItems });
-  };
+  const updateCartQuantity = async (itemId, newQuantity) => {
+    if (!loggedInUser || !db) return;
+    const item = inventory.find(i => i.id === itemId);
+    if (!item) return;
+
+    if (newQuantity > item.stock) {
+        showNotification(`Only ${item.stock} available in stock.`, 'error');
+        return;
+    }
+
+    const cartRef = doc(db, `artifacts/${appId}/public/data/carts`, loggedInUser.id);
+
+    try {
+        if (newQuantity <= 0) {
+            // Use dot notation to remove a specific field within the 'items' map
+            await updateDoc(cartRef, {
+                [`items.${itemId}`]: deleteField()
+            });
+        } else {
+            // Use dot notation to update a specific field within the 'items' map
+            await updateDoc(cartRef, {
+                [`items.${itemId}`]: newQuantity
+            });
+        }
+    } catch (error) {
+        console.error("Error updating cart quantity:", error);
+        // Fallback for when the document might not exist yet, though unlikely in this flow.
+        const newCartItems = { ...cart.items };
+        if (newQuantity <= 0) {
+            delete newCartItems[itemId];
+        } else {
+            newCartItems[itemId] = newQuantity;
+        }
+        await setDoc(cartRef, { items: newCartItems }, { merge: true });
+    }
+};
 
   const handlePurchaseRequest = async (userIdForCheckout = null) => {
       const checkoutUserId = isAdmin && userIdForCheckout ? userIdForCheckout : loggedInUser.id;
@@ -851,6 +873,16 @@ function App() {
         <CustomCursor />
         <style>
             {`
+                @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap');
+
+                body {
+                    font-family: 'Lato', sans-serif;
+                    background-color: #FFFBF0;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: 'Playfair Display', serif;
+                    color: #5D4037;
+                }
                 @keyframes marquee {
                     from { transform: translateX(100%); }
                     to { transform: translateX(-100%); }
@@ -862,8 +894,8 @@ function App() {
                     padding-left: 100%;
                 }
                 @keyframes glow {
-                    0%, 100% { box-shadow: 0 0 5px #104AD4, 0 0 10px #104AD4, 0 0 15px #104AD4; }
-                    50% { box-shadow: 0 0 10px #104AD4, 0 0 20px #104AD4, 0 0 30px #104AD4; }
+                    0%, 100% { box-shadow: 0 0 5px #F9A826, 0 0 10px #F9A826, 0 0 15px #F9A826; }
+                    50% { box-shadow: 0 0 10px #F9A826, 0 0 20px #F9A826, 0 0 30px #F9A826; }
                 }
                 .glow {
                     animation: glow 1.5s infinite alternate;
@@ -874,7 +906,7 @@ function App() {
                     left: 0;
                     width: 8px;
                     height: 8px;
-                    background-color: rgba(0, 0, 0, 0.8);
+                    background-color: #F9A826;
                     border-radius: 50%;
                     transform: translate(-50%, -50%);
                     pointer-events: none;
@@ -888,7 +920,7 @@ function App() {
                     left: 0;
                     width: 40px;
                     height: 40px;
-                    border: 2px solid rgba(0, 0, 0, 0.5);
+                    border: 2px solid #F9A826;
                     border-radius: 50%;
                     transform: translate(-50%, -50%);
                     pointer-events: none;
@@ -922,6 +954,7 @@ function App() {
           {currentPage === 'cart' && <CartPage />}
           {currentPage === 'profile' && <ProfilePage />}
           {currentPage === 'change-password' && <ChangePasswordPage />}
+          {currentPage === 'raffle' && <RafflePage />}
           {isAdmin && currentPage === 'admin/inventory' && <InventoryManagement />}
           {isAdmin && currentPage === 'admin/employees' && <EmployeeManagement />}
           {isAdmin && currentPage === 'admin/approvals' && <ApprovalQueue />}
@@ -975,8 +1008,8 @@ const Modal = (props) => {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4 text-[#07124a]">{modal.title}</h2>
-                <div className="text-[#4e4e4e] mb-6">{modal.content}</div>
+                <h2 className="text-xl font-bold mb-4 text-[#5D4037]">{modal.title}</h2>
+                <div className="text-[#4E443C] mb-6">{modal.content}</div>
                 <div className="flex justify-end gap-4">
                     {modal.onConfirm ? (
                         <>
@@ -993,7 +1026,7 @@ const Modal = (props) => {
                             </button>
                         </>
                     ) : (
-                        <button onClick={closeModal} className="px-4 py-2 bg-[#104AD4] text-white rounded-md hover:bg-[#0d3aab]">
+                        <button onClick={closeModal} className="px-4 py-2 bg-[#F9A826] text-white rounded-md hover:bg-[#FDB813]">
                             OK
                         </button>
                     )}
@@ -1007,21 +1040,21 @@ const TermsPopup = ({ onAgree }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md text-center transform transition-all animate-fade-in-up">
-        <h2 className="text-2xl font-bold mb-4 text-[#07124a]">Terms and Conditions</h2>
-        <p className="text-[#4e4e4e] mb-6 text-base">
+        <h2 className="text-2xl font-bold mb-4 text-[#5D4037]">Terms and Conditions</h2>
+        <p className="text-[#4E443C] mb-6 text-base">
           By entering this store, I am agreeing to the{' '}
           <a
             href="https://docs.google.com/forms/d/e/1FAIpQLScFpQruqzSOYj6Yl6XmH_93C-63BtUkWVyg9EM9Nuc_nGx6XQ/viewform"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#104AD4] hover:text-[#0d3aab] underline font-medium"
+            className="text-[#F9A826] hover:text-[#FDB813] underline font-medium"
           >
             Terms and Conditions
           </a>.
         </p>
         <button
           onClick={onAgree}
-          className="w-full bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#104AD4] transition-colors"
+          className="w-full bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#F9A826] transition-colors"
         >
           I Agree & Continue
         </button>
@@ -1044,20 +1077,20 @@ const Login = (props) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white">
+    <div className="flex items-center justify-center min-h-screen bg-[#FFFBF0]">
       {!hasAgreed && <TermsPopup onAgree={() => setHasAgreed(true)} />}
 
       <div className={`w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg transition-filter duration-300 ${!hasAgreed ? 'filter blur-sm pointer-events-none' : ''}`}>
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#104AD4]">Pinnacle Perks</h1>
-          <p className="mt-2 text-[#4e4e4e]">Employee Store Login</p>
+          <h1 className="text-4xl font-bold text-[#F9A826]">Pinnacle Perks</h1>
+          <p className="mt-2 text-[#4E443C]">Employee Store Login</p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <input 
                 id="username" name="username" type="text" required 
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-t-md bg-gray-50 focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-t-md bg-gray-50 focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] focus:z-10 sm:text-sm"
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -1066,7 +1099,7 @@ const Login = (props) => {
             <div>
               <input 
                 id="password" name="password" type="password" required 
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-b-md bg-gray-50 focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-b-md bg-gray-50 focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -1074,7 +1107,7 @@ const Login = (props) => {
             </div>
           </div>
           <div>
-            <button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#104AD4] hover:bg-[#0d3aab] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#104AD4] transition-colors">
+            <button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#F9A826] hover:bg-[#FDB813] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#F9A826] transition-colors">
               Sign in
             </button>
           </div>
@@ -1087,7 +1120,7 @@ const Login = (props) => {
 const Notification = (props) => {
     const { notification } = useContext(AppContext);
 
-    if (!notification) return null;
+    if (!notification || !notification.show) return null;
 
     const typeStyles = { 
         success: 'bg-green-500 text-white', 
@@ -1113,7 +1146,7 @@ const Marquee = () => {
     }
 
     return (
-        <div className="bg-[#104AD4] text-white overflow-hidden flex">
+        <div className="bg-[#F9A826] text-white overflow-hidden flex">
             <div className="animate-marquee whitespace-nowrap py-2">
                 <span className="mx-16 font-semibold">{config.marquee.message}</span>
             </div>
@@ -1133,48 +1166,49 @@ const Navbar = (props) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <button onClick={() => setCurrentPage('store')} className="flex-shrink-0 text-2xl font-bold text-[#07124a]">
+            <button onClick={() => setCurrentPage('store')} className="flex-shrink-0 text-2xl font-bold text-[#5D4037]">
               Pinnacle Perks
             </button>
             <nav className="hidden md:block ml-10">
               <div className="flex items-baseline space-x-4">
-                <button onClick={() => setCurrentPage('store')} className="text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors">Store</button>
-                <button onClick={() => setCurrentPage('profile')} className="text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors">Profile</button>
+                <button onClick={() => setCurrentPage('store')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">Store</button>
+                <button onClick={() => setCurrentPage('profile')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">Profile</button>
+                <button onClick={() => setCurrentPage('raffle')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">Raffle</button>
                 {isAdmin && (
                   <>
-                    <button onClick={() => setCurrentPage('admin/inventory')} className="text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors">Inventory</button>
-                    <button onClick={() => setCurrentPage('admin/employees')} className="text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors">Employees</button>
-                    <button onClick={() => setCurrentPage('admin/approvals')} className="relative text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    <button onClick={() => setCurrentPage('admin/inventory')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">Inventory</button>
+                    <button onClick={() => setCurrentPage('admin/employees')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">Employees</button>
+                    <button onClick={() => setCurrentPage('admin/approvals')} className="relative text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                       Approvals
                       {pendingPurchasesCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-red-500 text-white rounded-full h-5 w-5 text-xs flex items-center justify-center">{pendingPurchasesCount}</span>}
                     </button>
-                    <button onClick={() => setCurrentPage('admin/settings')} className="text-[#4e4e4e] hover:text-[#104AD4] px-3 py-2 rounded-md text-sm font-medium transition-colors"><Settings size={18}/></button>
+                    <button onClick={() => setCurrentPage('admin/settings')} className="text-[#4E443C] hover:text-[#F9A826] px-3 py-2 rounded-md text-sm font-medium transition-colors"><Settings size={18}/></button>
                   </>
                 )}
               </div>
             </nav>
           </div>
           <div className="flex items-center">
-             <div className="mr-4 text-sm text-[#4e4e4e] hidden sm:block">
+             <div className="mr-4 text-sm text-[#4E443C] hidden sm:block">
                <span className="font-semibold">{loggedInUser.points.toLocaleString()}</span>
-               <span className="text-[#104AD4]"> Pinn Points</span>
+               <span className="text-[#F9A826]"> Pinn Points</span>
              </div>
-             <button onClick={() => setCurrentPage('cart')} className="relative mr-4 p-2 rounded-full text-gray-600 hover:text-[#104AD4] hover:bg-gray-100 focus:outline-none transition-colors">
+             <button onClick={() => setCurrentPage('cart')} className="relative mr-4 p-2 rounded-full text-gray-600 hover:text-[#F9A826] hover:bg-gray-100 focus:outline-none transition-colors">
                <ShoppingCart/>
-               {cartItemCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-[#104AD4] text-white rounded-full h-5 w-5 text-xs flex items-center justify-center">{cartItemCount}</span>}
+               {cartItemCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-[#F9A826] text-white rounded-full h-5 w-5 text-xs flex items-center justify-center">{cartItemCount}</span>}
              </button>
             <div className="flex items-center ml-2">
               <img className="h-8 w-8 rounded-full object-cover" src={loggedInUser.pictureUrl} alt={loggedInUser.username} onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Err`; }}/>
-              <span className="ml-2 text-[#4e4e4e] text-sm font-medium hidden md:block">{loggedInUser.employeeName || loggedInUser.username}</span>
+              <span className="ml-2 text-[#4E443C] text-sm font-medium hidden md:block">{loggedInUser.employeeName || loggedInUser.username}</span>
             </div>
-            <button onClick={handleLogout} className="ml-4 p-2 rounded-full text-gray-600 hover:text-[#104AD4] hover:bg-gray-100 focus:outline-none transition-colors">
+            <button onClick={handleLogout} className="ml-4 p-2 rounded-full text-gray-600 hover:text-[#F9A826] hover:bg-gray-100 focus:outline-none transition-colors">
               <LogOut size={20}/>
             </button>
           </div>
         </div>
       </div>
        {config?.promotion?.active && config.promotion.message && (
-        <div className="bg-[#104AD4] text-white text-center p-2 text-sm font-bold">
+        <div className="bg-[#F9A826] text-white text-center p-2 text-sm font-bold">
             {config.promotion.message}
         </div>
        )}
@@ -1196,7 +1230,7 @@ const InflationBar = () => {
 
     if (userInflation === 0) return null;
     
-    const color = userInflation > 0 ? 'bg-red-500' : 'bg-[#104AD4]';
+    const color = userInflation > 0 ? 'bg-red-500' : 'bg-[#F9A826]';
     const text = userInflation > 0 
         ? `Inflation Alert: An inflation rate of ${userInflation}% is being applied based on your department.` 
         : `Deflation: A rate of ${Math.abs(userInflation)}% is being applied based on your department.`;
@@ -1219,10 +1253,10 @@ const PriceDisplay = ({ item, checkoutUser }) => {
             {finalPrice !== item.price ? (
                 <div className="flex items-baseline gap-2">
                     <p className="text-gray-500 line-through text-sm">{item.price.toLocaleString()} PP</p>
-                    <p className="text-lg font-bold text-[#104AD4]">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
+                    <p className="text-lg font-bold text-[#F9A826]">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
                 </div>
             ) : (
-                <p className="text-lg font-bold text-[#104AD4]">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
+                <p className="text-lg font-bold text-[#F9A826]">{finalPrice.toLocaleString()} <span className="text-sm font-normal">PP</span></p>
             )}
         </div>
     );
@@ -1238,10 +1272,10 @@ const CollapsibleAdminMessage = ({ popupConfig }) => {
     const { imageUrl, textMessage } = popupConfig;
 
     return (
-        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-lg shadow-lg mb-6 border border-blue-200 glow">
+        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-lg shadow-lg mb-6 border border-yellow-200 glow">
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex justify-between items-center text-left font-bold text-lg text-[#07124a]"
+                className="w-full flex justify-between items-center text-left font-bold text-lg text-[#5D4037]"
             >
                 <span>Message from the Admin</span>
                 <Icon size={20}>
@@ -1256,7 +1290,7 @@ const CollapsibleAdminMessage = ({ popupConfig }) => {
                         className="w-full h-auto rounded-md mb-4"
                         onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x400/CCCCCC/FFFFFF?text=Image+Error'; }}
                     />
-                    <p className="text-[#4e4e4e]">{textMessage}</p>
+                    <p className="text-[#4E443C]">{textMessage}</p>
                 </div>
             )}
         </div>
@@ -1283,7 +1317,7 @@ const StorePage = (props) => {
     const SortButton = ({ value, label }) => (
         <button
             onClick={() => setSortKey(value)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${sortKey === value ? 'bg-[#104AD4] text-white' : 'bg-gray-200 text-[#4e4e4e] hover:bg-gray-300'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${sortKey === value ? 'bg-[#F9A826] text-white' : 'bg-gray-200 text-[#4E443C] hover:bg-gray-300'}`}
         >
             {label}
         </button>
@@ -1297,12 +1331,12 @@ const StorePage = (props) => {
             </div>
             <div className="lg:col-span-3">
                 <div className="flex justify-between items-center mb-6">
-                     <h1 className="text-3xl font-bold text-[#07124a]">Welcome to the Store</h1>
+                     <h1 className="text-3xl font-bold text-[#5D4037]">Welcome to the Store</h1>
                      <div className="flex items-center gap-2">
-                         <span className="text-sm font-medium text-gray-600">Sort by:</span>
-                         <SortButton value="name" label="Name" />
-                         <SortButton value="price" label="Price" />
-                         <SortButton value="stock" label="Stock" />
+                        <span className="text-sm font-medium text-gray-600">Sort by:</span>
+                        <SortButton value="name" label="Name" />
+                        <SortButton value="price" label="Price" />
+                        <SortButton value="stock" label="Stock" />
                      </div>
                 </div>
                 {sortedInventory.length > 0 ? (
@@ -1314,15 +1348,15 @@ const StorePage = (props) => {
                                     {item.discount > 0 && <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">{item.discount}% OFF</div>}
                                 </div>
                                 <div className="p-4 flex flex-col flex-grow">
-                                    <h3 className="text-xl font-semibold text-[#07124a]">{item.name}</h3>
-                                    <p className="text-sm text-[#4e4e4e] mt-1 flex-grow">{item.description}</p>
+                                    <h3 className="text-xl font-semibold text-[#5D4037]">{item.name}</h3>
+                                    <p className="text-sm text-[#4E443C] mt-1 flex-grow">{item.description}</p>
                                     <div className="mt-4">
                                         <PriceDisplay item={item} />
                                         <p className="text-xs text-gray-500">{item.stock} left in stock</p>
                                     </div>
                                 </div>
                                 <div className="p-4 bg-gray-50">
-                                    <button onClick={() => addToCart(item.id)} className="w-full bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] transition-colors">
+                                    <button onClick={() => addToCart(item.id)} className="w-full bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] transition-colors">
                                         Add to Cart
                                     </button>
                                 </div>
@@ -1416,8 +1450,8 @@ const CartPage = (props) => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h1 className="text-3xl font-bold text-[#07124a] mb-6">Your Cart</h1>
-            {cartItems.length === 0 ? <p className="text-[#4e4e4e]">Your cart is empty.</p> : (
+            <h1 className="text-3xl font-bold text-[#5D4037] mb-6">Your Cart</h1>
+            {cartItems.length === 0 ? <p className="text-[#4E443C]">Your cart is empty.</p> : (
                 <div>
                     <div className="space-y-4">
                         {cartItems.map(item => (
@@ -1425,7 +1459,7 @@ const CartPage = (props) => {
                                 <div className="flex items-center">
                                   <img src={item.pictureUrl} alt={item.name} className="h-20 w-20 rounded-md object-cover mr-4" />
                                   <div>
-                                    <h3 className="font-semibold text-lg text-[#07124a]">{item.name}</h3>
+                                    <h3 className="font-semibold text-lg text-[#5D4037]">{item.name}</h3>
                                     <PriceDisplay item={item} checkoutUser={checkoutUser} />
                                   </div>
                                 </div>
@@ -1444,7 +1478,7 @@ const CartPage = (props) => {
                     <div className="mt-6 flex justify-between items-start">
                         <div className="w-1/2 pr-4">
                             <div className="mb-4">
-                                <label htmlFor="coupon" className="font-semibold text-[#07124a]">Coupon Code</label>
+                                <label htmlFor="coupon" className="font-semibold text-[#5D4037]">Coupon Code</label>
                                 <div className="flex mt-1">
                                     <input type="text" id="coupon" value={couponCode} onChange={e => setCouponCode(e.target.value)} placeholder="Enter coupon" className="p-2 border rounded-l-md w-full"/>
                                     <button onClick={() => handleApplyCoupon(couponCode)} className="bg-gray-600 text-white px-4 rounded-r-md hover:bg-gray-700">Apply</button>
@@ -1452,16 +1486,16 @@ const CartPage = (props) => {
                             </div>
                             {availableCoupons.length > 0 && (
                                 <div>
-                                    <h3 className="font-semibold text-[#07124a]">Your Available Coupons:</h3>
+                                    <h3 className="font-semibold text-[#5D4037]">Your Available Coupons:</h3>
                                     <div className="flex flex-wrap gap-4 mt-2">
                                         {availableCoupons.map(coupon => (
                                             <button
                                                 key={coupon.name}
                                                 onClick={() => handleApplyCoupon(coupon.name)}
-                                                className="bg-blue-100/80 text-[#07124a] p-4 rounded-lg shadow-lg glow transform hover:scale-105 transition-transform duration-300 flex flex-col items-center justify-center"
+                                                className="bg-yellow-100/80 text-[#5D4037] p-4 rounded-lg shadow-lg glow transform hover:scale-105 transition-transform duration-300 flex flex-col items-center justify-center"
                                             >
                                                 <div className="font-bold text-lg">{coupon.label || coupon.name}</div>
-                                                <div className="text-3xl font-bold text-[#104AD4] my-1">{coupon.discount}%</div>
+                                                <div className="text-3xl font-bold text-[#F9A826] my-1">{coupon.discount}%</div>
                                                 <div className="text-xs text-gray-500">OFF</div>
                                             </button>
                                         ))}
@@ -1472,8 +1506,8 @@ const CartPage = (props) => {
 
                         <div className="text-right space-y-2 w-1/2">
                             <p className="text-xl">Subtotal: {subtotal.toLocaleString()} PP</p>
-                            {couponDiscountDetails && <p className="text-lg text-[#104AD4]">Coupon ({couponDiscountDetails.name}): -{couponDiscountDetails.discountAmount.toLocaleString()} PP</p>}
-                            {userDiscount > 0 && <p className="text-lg text-[#104AD4]">Employee Discount ({userDiscount}%): -{userDiscountAmount.toLocaleString()} PP</p>}
+                            {couponDiscountDetails && <p className="text-lg text-[#F9A826]">Coupon ({couponDiscountDetails.name}): -{couponDiscountDetails.discountAmount.toLocaleString()} PP</p>}
+                            {userDiscount > 0 && <p className="text-lg text-[#F9A826]">Employee Discount ({userDiscount}%): -{userDiscountAmount.toLocaleString()} PP</p>}
                             <p className="text-2xl font-bold">Total: {total.toLocaleString()} PP</p>
                             {isAdmin && (
                                 <div className="mt-4 flex justify-end items-center gap-2">
@@ -1484,7 +1518,7 @@ const CartPage = (props) => {
                                     </select>
                                 </div>
                             )}
-                            <button onClick={() => handlePurchaseRequest(checkoutForUserId)} className="mt-4 bg-[#104AD4] text-white font-bold py-3 px-8 rounded-md hover:bg-[#0d3aab] transition-colors">
+                            <button onClick={() => handlePurchaseRequest(checkoutForUserId)} className="mt-4 bg-[#F9A826] text-white font-bold py-3 px-8 rounded-md hover:bg-[#FDB813] transition-colors">
                                 {isAdmin && checkoutForUserId !== loggedInUser.id ? `Checkout for ${checkoutUser.employeeName}` : `Request Purchase`}
                             </button>
                         </div>
@@ -1530,7 +1564,7 @@ const ProfilePage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg flex flex-col items-center text-center">
                 <div className="relative group">
-                    <img src={loggedInUser.pictureUrl} alt="Profile" className="h-40 w-40 rounded-full object-cover border-4 border-[#104AD4]" onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Error`; }}/>
+                    <img src={loggedInUser.pictureUrl} alt="Profile" className="h-40 w-40 rounded-full object-cover border-4 border-[#F9A826]" onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/100x100/CCCCCC/FFFFFF?text=Error`; }}/>
                     <button onClick={() => fileInputRef.current.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                         <Camera size={40} />
                     </button>
@@ -1540,15 +1574,15 @@ const ProfilePage = () => {
                 <p className="text-gray-500">@{loggedInUser.username} | <span className="capitalize">{loggedInUser.role}</span></p>
                 <div className="mt-2 flex flex-wrap justify-center gap-2">
                     {(loggedInUser.departments && loggedInUser.departments.length > 0) ? loggedInUser.departments.map(dept => (
-                        <span key={dept} className="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full">{dept}</span>
+                        <span key={dept} className="text-sm font-semibold text-yellow-800 bg-yellow-100 px-3 py-1 rounded-full">{dept}</span>
                     )) : <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1 rounded-full">Unassigned</span>}
                 </div>
-                {loggedInUser.globalDiscount > 0 && <p className="mt-2 text-sm font-semibold text-[#104AD4] bg-blue-100 px-3 py-1 rounded-full">{loggedInUser.globalDiscount}% Global Discount</p>}
-                <div className="mt-6 bg-blue-100 text-[#104AD4] p-4 rounded-lg text-center w-full">
+                {loggedInUser.globalDiscount > 0 && <p className="mt-2 text-sm font-semibold text-[#F9A826] bg-yellow-100 px-3 py-1 rounded-full">{loggedInUser.globalDiscount}% Global Discount</p>}
+                <div className="mt-6 bg-yellow-100 text-[#F9A826] p-4 rounded-lg text-center w-full">
                     <p className="text-lg">Available Balance</p>
                     <p className="text-4xl font-bold">{loggedInUser.points.toLocaleString()} PP</p>
                 </div>
-                 <button onClick={() => setCurrentPage('change-password')} className="mt-6 bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] transition-colors">
+                 <button onClick={() => setCurrentPage('change-password')} className="mt-6 bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] transition-colors">
                     Change Password
                 </button>
             </div>
@@ -1561,8 +1595,8 @@ const ProfilePage = () => {
                                 {entry.type === 'purchase' ? (
                                     <>
                                         <div className="flex justify-between items-center mb-2">
-                                            <p className="font-semibold text-[#4e4e4e]">Order from {new Date(entry.data.date).toLocaleDateString()}</p>
-                                            <p className="font-bold text-lg text-[#104AD4]">-{entry.data.totalCost.toLocaleString()} PP</p>
+                                            <p className="font-semibold text-[#4E443C]">Order from {new Date(entry.data.date).toLocaleDateString()}</p>
+                                            <p className="font-bold text-lg text-[#F9A826]">-{entry.data.totalCost.toLocaleString()} PP</p>
                                         </div>
                                         <ul className="list-disc list-inside text-sm text-gray-600">
                                             {entry.data.items.map(item => <li key={item.id}>{item.name} (x{item.quantity}) @ {item.purchasePrice.toLocaleString()} PP each</li>)}
@@ -1571,14 +1605,14 @@ const ProfilePage = () => {
                                 ) : (
                                     <div className="flex justify-between items-center">
                                         <div>
-                                            <p className="font-semibold text-[#4e4e4e]">
+                                            <p className="font-semibold text-[#4E443C]">
                                                 {entry.data.pointsAdded > 0 ? 'Points Added' : 'Points Deducted'}
                                             </p>
                                             <p className="text-sm text-gray-500">
                                                 On {entry.date.toLocaleDateString()}
                                             </p>
                                         </div>
-                                        <p className={`font-bold text-lg ${entry.data.pointsAdded > 0 ? 'text-[#104AD4]' : 'text-red-500'}`}>
+                                        <p className={`font-bold text-lg ${entry.data.pointsAdded > 0 ? 'text-[#F9A826]' : 'text-red-500'}`}>
                                             {entry.data.pointsAdded > 0 ? '+' : ''}{entry.data.pointsAdded.toLocaleString()} PP
                                         </p>
                                     </div>
@@ -1598,7 +1632,7 @@ const Leaderboard = () => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg h-full">
-            <h3 className="text-2xl font-bold mb-4 flex items-center text-[#07124a]"><BarChart2 className="mr-2 text-[#104AD4]"/> Top 10 Employees by Points</h3>
+            <h3 className="text-2xl font-bold mb-4 flex items-center text-[#5D4037]"><BarChart2 className="mr-2 text-[#F9A826]"/> Top 10 Employees by Points</h3>
             <ol className="space-y-3">
                 {topEmployees.map((user, index) => (
                     <li key={user.id} className="flex items-center justify-between p-2 rounded-md transition-colors hover:bg-gray-50">
@@ -1607,7 +1641,7 @@ const Leaderboard = () => {
                             <img src={user.pictureUrl} alt={user.username} className="h-10 w-10 rounded-full object-cover mr-3" />
                             <span className="font-medium text-black">{user.employeeName || user.username}</span>
                         </div>
-                        <span className="font-bold text-[#104AD4]">{user.points.toLocaleString()} PP</span>
+                        <span className="font-bold text-[#F9A826]">{user.points.toLocaleString()} PP</span>
                     </li>
                 ))}
             </ol>
@@ -1617,7 +1651,7 @@ const Leaderboard = () => {
 
 const AdminPageContainer = ({ title, icon, children }) => (
     <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-[#07124a] mb-6 flex items-center">{icon} {title}</h1>
+        <h1 className="text-3xl font-bold text-[#5D4037] mb-6 flex items-center">{icon} {title}</h1>
         {children}
     </div>
 );
@@ -1681,9 +1715,9 @@ const InventoryManagement = () => {
     return (
         <AdminPageContainer title="Inventory Management" icon={<Box className="mr-3"/>}>
             <div className="mb-4 flex items-center gap-4 flex-wrap">
-                <button onClick={handleAddNewItem} disabled={isUploading} className="bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] flex items-center disabled:bg-gray-400"><PlusCircle size={18} className="mr-2"/>Add New Item</button>
-                <button onClick={downloadCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Template</button>
-                <label className={`bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                <button onClick={handleAddNewItem} disabled={isUploading} className="bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] flex items-center disabled:bg-gray-400"><PlusCircle size={18} className="mr-2"/>Add New Item</button>
+                <button onClick={downloadCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Template</button>
+                <label className={`bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
                     {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
                     {isUploading ? 'Uploading...' : 'Upload CSV'}
                     <input type="file" accept=".csv" onChange={onFileSelect} disabled={isUploading} className="hidden" />
@@ -1691,12 +1725,12 @@ const InventoryManagement = () => {
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-[#07124a] uppercase bg-gray-50">
+                    <thead className="text-xs text-[#5D4037] uppercase bg-gray-50">
                         <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3">Description</th><th className="px-6 py-3">Price</th><th className="px-6 py-3">Stock</th><th className="px-6 py-3">Discount</th><th className="px-6 py-3">Actions</th></tr>
                     </thead>
                     <tbody>
                         {inventory.map(item => editingItem?.id === item.id ? (
-                            <tr key={item.id} className="bg-blue-50">
+                            <tr key={item.id} className="bg-yellow-50">
                                 <td className="px-6 py-4">
                                     <div className="relative group w-24 h-24 mb-2">
                                         <img src={editingItem.pictureUrl} alt="item" className="w-24 h-24 object-cover rounded-md"/>
@@ -1892,29 +1926,29 @@ const EmployeeManagement = () => {
     return (
         <AdminPageContainer title="Employee Management" icon={<Users className="mr-3"/>}>
              <div className="mb-4 flex items-center gap-4 flex-wrap">
-                <button onClick={handleAddNewUser} disabled={isUploading} className="bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee</button>
-                <button onClick={downloadEmployeesCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Employees</button>
-                <label className={`bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                <button onClick={handleAddNewUser} disabled={isUploading} className="bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] flex items-center disabled:bg-gray-400"><UserPlus size={18} className="mr-2"/>Add Employee</button>
+                <button onClick={downloadEmployeesCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Employees</button>
+                <label className={`bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
                     {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
                     {isUploading ? 'Uploading...' : 'Upload Employees'}
                     <input type="file" accept=".csv" onChange={onEmployeesFileSelect} disabled={isUploading} className="hidden" />
                 </label>
-                 <button onClick={downloadPointsCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Points Template</button>
-                <label className={`bg-gray-200 text-[#4e4e4e] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
+                 <button onClick={downloadPointsCSVTemplate} disabled={isUploading} className="bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center disabled:bg-gray-400"><Download size={18} className="mr-2"/>Download Points Template</button>
+                <label className={`bg-gray-200 text-[#4E443C] font-bold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors flex items-center cursor-pointer ${isUploading ? 'bg-gray-400 cursor-not-allowed' : ''}`}>
                     {isUploading ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Upload size={18} className="mr-2"/>}
                     {isUploading ? 'Uploading...' : 'Upload Points'}
                     <input type="file" accept=".csv" onChange={onPointsFileSelect} disabled={isUploading} className="hidden" />
                 </label>
                 {selectedUsers.size > 0 && (
                      <button onClick={handleDeleteSelected} disabled={isUploading} className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 flex items-center disabled:bg-gray-400">
-                         <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
+                        <XCircle size={18} className="mr-2"/>Delete Selected ({selectedUsers.size})
                     </button>
                 )}
             </div>
             {editingUser && <EditUserModal user={editingUser} onClose={() => setEditingUser(null)} onSave={(updated) => { updateUser(updated, editingUser); setEditingUser(null); }}/>}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-[#07124a] uppercase bg-gray-50">
+                    <thead className="text-xs text-[#5D4037] uppercase bg-gray-50">
                         <tr>
                             <th className="px-6 py-3"></th>
                             <th className="px-6 py-3 cursor-pointer" onClick={() => requestSort('employeeName')}>User</th>
@@ -1996,28 +2030,28 @@ const EditUserModal = ({ user, onClose, onSave }) => {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
-                <h2 className="text-xl font-bold mb-4 text-[#07124a]">Edit User: {user.employeeName}</h2>
+                <h2 className="text-xl font-bold mb-4 text-[#5D4037]">Edit User: {user.employeeName}</h2>
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Employee Name</label>
-                        <input type="text" name="employeeName" value={userData.employeeName} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] sm:text-sm" />
+                        <input type="text" name="employeeName" value={userData.employeeName} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] sm:text-sm" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" name="username" value={userData.username} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] sm:text-sm" />
+                        <input type="text" name="username" value={userData.username} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] sm:text-sm" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Points</label>
-                        <input type="number" name="points" value={userData.points} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] sm:text-sm" />
+                        <input type="number" name="points" value={userData.points} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] sm:text-sm" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Global Discount (%)</label>
-                        <input type="number" name="globalDiscount" value={userData.globalDiscount} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] sm:text-sm" />
+                        <input type="number" name="globalDiscount" value={userData.globalDiscount} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] sm:text-sm" />
                     </div>
                 </div>
                 <div className="flex justify-end gap-4 mt-6">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 bg-[#104AD4] text-white rounded-md hover:bg-[#0d3aab]">Save Changes</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-[#F9A826] text-white rounded-md hover:bg-[#FDB813]">Save Changes</button>
                 </div>
             </div>
         </div>
@@ -2038,12 +2072,12 @@ const ApprovalQueue = () => {
                             <div key={p.id} className="border rounded-lg p-4 shadow-sm bg-gray-50">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold text-lg text-[#07124a]">{p.employeeName || p.username}</p>
+                                        <p className="font-bold text-lg text-[#5D4037]">{p.employeeName || p.username}</p>
                                         <p className="text-sm text-gray-500">On: {new Date(p.date).toLocaleString()}</p>
                                         <p className="text-sm text-gray-600 mt-1">Current Balance: <strong>{user?.points.toLocaleString() || 'N/A'} PP</strong></p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-xl text-[#104AD4]">{p.totalCost.toLocaleString()} PP</p>
+                                        <p className="font-bold text-xl text-[#F9A826]">{p.totalCost.toLocaleString()} PP</p>
                                         <p className="text-sm text-gray-600 mt-1">Balance After: <strong>{((user?.points || 0) - p.totalCost).toLocaleString() || 'N/A'} PP</strong></p>
                                     </div>
                                 </div>
@@ -2058,7 +2092,7 @@ const ApprovalQueue = () => {
                                     </ul>
                                 </div>
                                 <div className="mt-4 flex justify-end gap-3">
-                                    <button onClick={() => handleApproval(p.id, true)} className="bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab] flex items-center"><CheckCircle size={18} className="mr-2"/>Approve</button>
+                                    <button onClick={() => handleApproval(p.id, true)} className="bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813] flex items-center"><CheckCircle size={18} className="mr-2"/>Approve</button>
                                     <button onClick={() => handleApproval(p.id, false)} className="bg-red-500 text-white font-bold py-2 px-4 rounded-md hover:bg-red-600 flex items-center"><XCircle size={18} className="mr-2"/>Reject</button>
                                 </div>
                             </div>
@@ -2137,7 +2171,7 @@ const SettingsPage = () => {
             <div className="space-y-8">
                 {/* Store Popup */}
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-2 text-[#07124a]">Store Welcome Popup</h3>
+                    <h3 className="text-xl font-semibold mb-2 text-[#5D4037]">Store Welcome Popup</h3>
                     <div className="space-y-4">
                         <input type="text" placeholder="Image URL" value={localConfig.storePopup?.imageUrl || ''} onChange={e => setLocalConfig({...localConfig, storePopup: {...localConfig.storePopup, imageUrl: e.target.value}})} className="p-2 border rounded-md w-full"/>
                         <textarea placeholder="Popup Text Message" value={localConfig.storePopup?.textMessage || ''} onChange={e => setLocalConfig({...localConfig, storePopup: {...localConfig.storePopup, textMessage: e.target.value}})} className="p-2 border rounded-md w-full" rows="3"></textarea>
@@ -2150,7 +2184,7 @@ const SettingsPage = () => {
 
                 {/* Marquee Announcement */}
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-2 text-[#07124a]">Marquee Announcement</h3>
+                    <h3 className="text-xl font-semibold mb-2 text-[#5D4037]">Marquee Announcement</h3>
                     <div className="flex items-center gap-4">
                         <input type="text" value={localConfig.marquee?.message || ''} onChange={e => setLocalConfig({...localConfig, marquee: {...localConfig.marquee, message: e.target.value}})} className="p-2 border rounded-md w-full"/>
                         <label className="flex items-center gap-2">
@@ -2162,7 +2196,7 @@ const SettingsPage = () => {
 
                 {/* Promotion Announcement */}
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-2 text-[#07124a]">Promotion Announcement</h3>
+                    <h3 className="text-xl font-semibold mb-2 text-[#5D4037]">Promotion Announcement</h3>
                     <div className="flex items-center gap-4">
                         <input type="text" value={localConfig.promotion?.message || ''} onChange={e => setLocalConfig({...localConfig, promotion: {...localConfig.promotion, message: e.target.value}})} className="p-2 border rounded-md w-full"/>
                         <label className="flex items-center gap-2">
@@ -2174,7 +2208,7 @@ const SettingsPage = () => {
 
                 {/* Coupons */}
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-2 text-[#07124a]">Coupon Repository</h3>
+                    <h3 className="text-xl font-semibold mb-2 text-[#5D4037]">Coupon Repository</h3>
                     <div className="space-y-4">
                         {(localConfig.coupons || []).map((coupon, index) => (
                             <div key={index} className="p-4 border rounded-md bg-gray-50 relative">
@@ -2190,7 +2224,7 @@ const SettingsPage = () => {
                                     <textarea placeholder="Specific usernames (comma-separated)" value={coupon.assignedUsers} onChange={e => handleCouponChange(index, 'assignedUsers', e.target.value)} className="p-2 border rounded-md w-full" rows="2"></textarea>
                                 </div>
                                 <div className="mt-4">
-                                    <p className="font-medium mb-2 text-[#07124a]">Applicable Departments:</p>
+                                    <p className="font-medium mb-2 text-[#5D4037]">Applicable Departments:</p>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                         {DEPARTMENTS.map(dept => (
                                             <label key={dept} className="flex items-center gap-2 text-sm">
@@ -2203,12 +2237,12 @@ const SettingsPage = () => {
                             </div>
                         ))}
                     </div>
-                    {localConfig.coupons?.length < 5 && <button onClick={addCoupon} className="mt-4 bg-[#104AD4] text-white font-bold py-2 px-4 rounded-md hover:bg-[#0d3aab]"><PlusCircle size={18} className="mr-2 inline"/>Add Coupon</button>}
+                    {localConfig.coupons?.length < 5 && <button onClick={addCoupon} className="mt-4 bg-[#F9A826] text-white font-bold py-2 px-4 rounded-md hover:bg-[#FDB813]"><PlusCircle size={18} className="mr-2 inline"/>Add Coupon</button>}
                 </div>
                 
                 {/* Inflation */}
                 <div className="p-6 border rounded-lg">
-                    <h3 className="text-xl font-semibold mb-4 text-[#07124a]">Department Inflation Rates</h3>
+                    <h3 className="text-xl font-semibold mb-4 text-[#5D4037]">Department Inflation Rates</h3>
                     <p className="text-sm text-gray-600 mb-4">Set a specific inflation percentage for each department. Use a negative number for deflation.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[...DEPARTMENTS, 'Unassigned'].map(dept => {
@@ -2225,7 +2259,7 @@ const SettingsPage = () => {
                 </div>
 
                  <div className="flex justify-end mt-6">
-                    <button onClick={handleSave} className="bg-[#104AD4] text-white font-bold py-3 px-6 rounded-md hover:bg-[#0d3aab] transition-colors">Save All Settings</button>
+                    <button onClick={handleSave} className="bg-[#F9A826] text-white font-bold py-3 px-6 rounded-md hover:bg-[#FDB813] transition-colors">Save All Settings</button>
                 </div>
 
                 <div className="p-6 border-2 border-red-500 rounded-lg space-y-4">
@@ -2288,7 +2322,7 @@ const ChangePasswordPage = ({isForced = false}) => {
         <div className="flex items-center justify-center min-h-screen">
             <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-[#07124a]">{pageTitle}</h1>
+                    <h1 className="text-3xl font-bold text-[#5D4037]">{pageTitle}</h1>
                     <p className="mt-2 text-gray-600">{pageSubTitle}</p>
                 </div>
                 <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -2299,7 +2333,7 @@ const ChangePasswordPage = ({isForced = false}) => {
                                 name="new-password"
                                 type="password"
                                 required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-t-md bg-gray-50 focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] focus:z-10 sm:text-sm"
+                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-t-md bg-gray-50 focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] focus:z-10 sm:text-sm"
                                 placeholder="New Password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -2311,7 +2345,7 @@ const ChangePasswordPage = ({isForced = false}) => {
                                 name="confirm-password"
                                 type="password"
                                 required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-b-md bg-gray-50 focus:outline-none focus:ring-[#104AD4] focus:border-[#104AD4] focus:z-10 sm:text-sm"
+                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-black rounded-b-md bg-gray-50 focus:outline-none focus:ring-[#F9A826] focus:border-[#F9A826] focus:z-10 sm:text-sm"
                                 placeholder="Confirm New Password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -2319,11 +2353,95 @@ const ChangePasswordPage = ({isForced = false}) => {
                         </div>
                     </div>
                     <div>
-                        <button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#104AD4] hover:bg-[#0d3aab] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#104AD4] transition-colors">
+                        <button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-[#F9A826] hover:bg-[#FDB813] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#F9A826] transition-colors">
                             Set New Password
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+};
+
+const RafflePage = () => {
+    const { loggedInUser, updateUser, users, showNotification } = useContext(AppContext);
+    const [ticketAmount, setTicketAmount] = useState(1);
+
+    const handlePurchaseTickets = () => {
+        const amount = parseInt(ticketAmount, 10);
+        if (isNaN(amount) || amount <= 0) {
+            showNotification("Please enter a valid number of tickets.", "error");
+            return;
+        }
+        if (loggedInUser.points < amount) {
+            showNotification("You don't have enough points for this purchase.", "error");
+            return;
+        }
+
+        const updatedUser = {
+            ...loggedInUser,
+            points: loggedInUser.points - amount,
+            raffleTickets: (loggedInUser.raffleTickets || 0) + amount,
+        };
+        updateUser(updatedUser, loggedInUser);
+        showNotification(`Successfully purchased ${amount} raffle ticket(s)!`, "success");
+        setTicketAmount(1);
+    };
+
+    const raffleLeaderboard = [...users]
+        .filter(u => u.role === 'employee' && u.raffleTickets > 0)
+        .sort((a, b) => b.raffleTickets - a.raffleTickets)
+        .slice(0, 10);
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
+                <h1 className="text-3xl font-bold text-[#5D4037] mb-4">Raffle Tickets</h1>
+                <p className="text-[#4E443C] mb-6">Convert your Pinn Points into raffle tickets for a chance to win big! Each ticket costs 1 Pinn Point.</p>
+                
+                <div className="bg-yellow-100/80 p-6 rounded-lg shadow-inner">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <p className="text-lg font-semibold text-[#5D4037]">Your Points Balance:</p>
+                            <p className="text-4xl font-bold text-[#F9A826]">{loggedInUser.points.toLocaleString()}</p>
+                        </div>
+                        <div>
+                            <p className="text-lg font-semibold text-[#5D4037]">Your Raffle Tickets:</p>
+                            <p className="text-4xl font-bold text-[#F9A826]">{loggedInUser.raffleTickets || 0}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4 mt-6">
+                        <input 
+                            type="number"
+                            min="1"
+                            value={ticketAmount}
+                            onChange={(e) => setTicketAmount(e.target.value)}
+                            className="p-2 border rounded-md w-full"
+                        />
+                        <button 
+                            onClick={handlePurchaseTickets}
+                            className="bg-[#F9A826] text-white font-bold py-2 px-8 rounded-md hover:bg-[#FDB813] transition-colors"
+                        >
+                            Purchase Tickets
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
+                <h3 className="text-2xl font-bold mb-4 flex items-center text-[#5D4037]">Raffle Leaderboard</h3>
+                <ol className="space-y-3">
+                    {raffleLeaderboard.map((user, index) => (
+                        <li key={user.id} className="flex items-center justify-between p-2 rounded-md transition-colors hover:bg-gray-50">
+                            <div className="flex items-center">
+                                <span className="font-bold text-lg w-8 text-gray-500">{index + 1}.</span>
+                                <img src={user.pictureUrl} alt={user.username} className="h-10 w-10 rounded-full object-cover mr-3" />
+                                <span className="font-medium text-black">{user.employeeName || user.username}</span>
+                            </div>
+                            <span className="font-bold text-[#F9A826]">{user.raffleTickets.toLocaleString()}</span>
+                        </li>
+                    ))}
+                </ol>
             </div>
         </div>
     );
